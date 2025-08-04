@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Mic, MicOff, Loader2, Zap } from "lucide-react"
+import { Mic, MicOff, Loader2, Zap } from 'lucide-react'
 import { VoiceService } from "@/lib/voice-service"
 
 interface VoiceInputButtonProps {
@@ -19,24 +19,22 @@ export default function VoiceInputButton({ onVoiceInput, disabled = false, class
   const [isInitialized, setIsInitialized] = useState(false)
 
   useEffect(() => {
-    // Initialize ElevenLabs Voice Service
+    // Initialize Web Speech API Voice Service
     const initializeVoiceService = async () => {
       try {
-        // Check if ElevenLabs API key is available
-        const response = await fetch("/api/check-elevenlabs-key")
-        const data = await response.json()
-
-        if (data.hasApiKey) {
+        // Check if Web Speech API is supported
+        const browserSupport = VoiceService.getBrowserSupport()
+        
+        if (browserSupport.supported) {
           VoiceService.initialize({
-            apiKey: "server-side-key", // Placeholder - actual key is used server-side
-            model: "eleven_multilingual_v2", // Default model
+            language: 'en-US', // Default to English
           })
 
           setIsSupported(VoiceService.isAvailable())
           setIsInitialized(true)
-          console.log("ElevenLabs Voice Service initialized")
+          console.log(`Web Speech API initialized with ${browserSupport.api}`)
         } else {
-          console.warn("ElevenLabs API key not found")
+          console.warn("Web Speech API not supported in this browser")
           setIsSupported(false)
         }
       } catch (error) {
@@ -55,7 +53,7 @@ export default function VoiceInputButton({ onVoiceInput, disabled = false, class
         setIsProcessing(true)
         setError(null)
 
-        console.log("Stopping recording and processing with ElevenLabs...")
+        console.log("Stopping recording and processing with Web Speech API...")
         const result = await VoiceService.stopRecording()
 
         if (result.text && result.text.trim().length > 0) {
@@ -78,7 +76,7 @@ export default function VoiceInputButton({ onVoiceInput, disabled = false, class
         setError(null)
         setIsRecording(true)
 
-        console.log("Starting ElevenLabs voice recording...")
+        console.log("Starting Web Speech API voice recording...")
         await VoiceService.startRecording()
 
         console.log("Recording started successfully")
@@ -123,8 +121,8 @@ export default function VoiceInputButton({ onVoiceInput, disabled = false, class
           buttonState === "recording"
             ? "Click to stop recording"
             : buttonState === "processing"
-              ? "Processing with ElevenLabs..."
-              : "Click to start voice input with ElevenLabs"
+              ? "Processing with Web Speech API..."
+              : "Click to start voice input with Web Speech API"
         }
       >
         {buttonState === "processing" ? (
@@ -160,12 +158,12 @@ export default function VoiceInputButton({ onVoiceInput, disabled = false, class
           {isProcessing ? (
             <>
               <Zap className="w-3 h-3 animate-pulse" />
-              <span>Processing with ElevenLabs...</span>
+              <span>Processing with Web Speech API...</span>
             </>
           ) : (
             <>
               <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span>Recording with ElevenLabs...</span>
+              <span>Recording with Web Speech API...</span>
             </>
           )}
           <button

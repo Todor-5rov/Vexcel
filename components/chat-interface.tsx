@@ -5,18 +5,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Send,
-  Bot,
-  User,
-  Zap,
-  MessageSquare,
-  AlertTriangle,
-  Cloud,
-  FolderSyncIcon as Sync,
-  Volume2,
-  Mic,
-} from "lucide-react"
+import { Send, Bot, User, Zap, MessageSquare, AlertTriangle, Cloud, FolderSyncIcon as Sync, Volume2, Mic } from 'lucide-react'
 import VoiceInputButton from "@/components/voice-input-button"
 import { ChatService, type ChatMessage } from "@/lib/chat-service"
 
@@ -43,7 +32,7 @@ export default function ChatInterface({
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [hasApiKey, setHasApiKey] = useState(false)
-  const [hasElevenLabsKey, setHasElevenLabsKey] = useState(false)
+  const [hasVoiceSupport, setHasVoiceSupport] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [isLoadingChat, setIsLoadingChat] = useState(false)
   const [chatInitialized, setChatInitialized] = useState(false) // 🔥 CRITICAL: Prevent multiple initializations
@@ -67,30 +56,29 @@ export default function ChatInterface({
     return cleaned
   }
 
-  // Check if API keys are configured
+  // Check if API keys are configured and voice support
   useEffect(() => {
     const checkApiKeys = async () => {
       try {
-        console.log("Checking API keys...")
+        console.log("Checking API keys and voice support...")
 
         // Check OpenAI API key
         const openaiResponse = await fetch("/api/check-api-key")
         const openaiData = await openaiResponse.json()
         setHasApiKey(openaiData.hasApiKey)
 
-        // Check ElevenLabs API key
-        const elevenLabsResponse = await fetch("/api/check-elevenlabs-key")
-        const elevenLabsData = await elevenLabsResponse.json()
-        setHasElevenLabsKey(elevenLabsData.hasApiKey)
+        // Check Web Speech API support
+        const voiceSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
+        setHasVoiceSupport(voiceSupported)
 
         console.log("API key check results:", {
           openai: openaiData.hasApiKey,
-          elevenlabs: elevenLabsData.hasApiKey,
+          voice: voiceSupported,
         })
       } catch (error) {
         console.error("Error checking API keys:", error)
         setHasApiKey(false)
-        setHasElevenLabsKey(false)
+        setHasVoiceSupport(false)
       }
     }
 
@@ -184,7 +172,7 @@ export default function ChatInterface({
     console.log("MCP File Path:", mcpFilePath)
     console.log("File ID:", fileId)
     console.log("Session ID:", sessionId)
-    console.log("Has API keys:", { openai: hasApiKey, elevenlabs: hasElevenLabsKey })
+    console.log("Has API keys:", { openai: hasApiKey, voice: hasVoiceSupport })
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -351,7 +339,7 @@ export default function ChatInterface({
           "Create a pivot table",
           "Generate a chart from this data",
         ]
-      : ["Upload an Excel file first", "Try voice commands with ElevenLabs", "Learn about VExcel features"]
+      : ["Upload an Excel file first", "Try voice commands with Web Speech API", "Learn about VExcel features"]
 
   const canChat = mcpFilePath && hasApiKey
   const filename = mcpFilePath?.split("/").pop() || ""
@@ -370,7 +358,7 @@ export default function ChatInterface({
               <div
                 className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${canChat ? "bg-green-500" : "bg-yellow-500"} animate-pulse`}
               />
-              {hasElevenLabsKey && (
+              {hasVoiceSupport && (
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white bg-blue-500 flex items-center justify-center">
                   <Mic className="h-2 w-2 text-white" />
                 </div>
@@ -384,11 +372,11 @@ export default function ChatInterface({
                   <span className="flex items-center gap-1">
                     <Sync className="h-3 w-3" />
                     Ready with {filename}
-                    {hasElevenLabsKey && (
+                    {hasVoiceSupport && (
                       <>
                         <span>•</span>
                         <Mic className="h-3 w-3" />
-                        <span>ElevenLabs Voice</span>
+                        <span>Voice Input</span>
                       </>
                     )}
                   </span>
@@ -493,7 +481,7 @@ export default function ChatInterface({
                       {message.voiceInput && (
                         <div className="flex items-center gap-1">
                           <Volume2 className="h-3 w-3 text-primary-400" />
-                          <span className="text-xs text-primary-400">ElevenLabs</span>
+                          <span className="text-xs text-primary-400">Voice</span>
                         </div>
                       )}
                     </div>
@@ -548,7 +536,7 @@ export default function ChatInterface({
               <div className="text-xs text-yellow-600 space-y-1">
                 {!hasApiKey && <p>• OpenAI API key not configured</p>}
                 {!mcpFilePath && <p>• No file selected for processing</p>}
-                {!hasElevenLabsKey && <p>• ElevenLabs API key not configured (voice input disabled)</p>}
+                {!hasVoiceSupport && <p>• Voice input not supported in this browser</p>}
               </div>
             </div>
           )}
@@ -591,8 +579,8 @@ export default function ChatInterface({
                         ? "Upload a file first to get started"
                         : !hasApiKey
                           ? "OpenAI API key required..."
-                          : hasElevenLabsKey
-                            ? "Ask me to modify your Excel data or use voice input with ElevenLabs..."
+                          : hasVoiceSupport
+                            ? "Ask me to modify your Excel data or use voice input..."
                             : "Ask me to modify your Excel data with auto-sync to OneDrive..."
                     }
                     disabled={!canChat || isLoading}
@@ -606,8 +594,8 @@ export default function ChatInterface({
                   )}
                 </div>
 
-                {/* Voice Input Button - Only show if ElevenLabs is available */}
-                {hasElevenLabsKey && (
+                {/* Voice Input Button - Only show if Web Speech API is available */}
+                {hasVoiceSupport && (
                   <VoiceInputButton onVoiceInput={handleVoiceInput} disabled={!canChat || isLoading} className="h-12" />
                 )}
 

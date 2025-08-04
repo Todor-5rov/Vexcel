@@ -1,6 +1,7 @@
 export interface VoiceConfig {
-  apiKey: string
+  apiKey?: string
   model?: string
+  language?: string
 }
 
 export interface SpeechToTextResult {
@@ -11,24 +12,20 @@ export interface SpeechToTextResult {
 
 export class VoiceService {
   private static config: VoiceConfig | null = null
-  private static mediaRecorder: MediaRecorder | null = null
-  private static audioChunks: Blob[] = []
+  private static recognition: SpeechRecognition | null = null
   private static isRecording = false
-  private static stream: MediaStream | null = null
 
-  // Initialize the voice service with ElevenLabs API key
-  static initialize(config: VoiceConfig) {
-    this.config = config
-    console.log("Voice service initialized with ElevenLabs")
+  // Initialize the voice service with browser Speech Recognition
+  static initialize(config: VoiceConfig = {}) {
+    this.config = { language: 'en-US', ...config }
+    console.log("Voice service initialized with Web Speech API")
   }
 
   // Check if voice service is available
   static isAvailable(): boolean {
     return !!(
-      this.config?.apiKey &&
-      navigator.mediaDevices &&
-      navigator.mediaDevices.getUserMedia &&
-      window.MediaRecorder
+      'webkitSpeechRecognition' in window || 
+      'SpeechRecognition' in window
     )
   }
 
@@ -38,44 +35,26 @@ export class VoiceService {
       throw new Error("Already recording")
     }
 
-    if (!this.config?.apiKey) {
-      throw new Error("ElevenLabs API key not configured")
+    if (!this.isAvailable()) {
+      throw new Error("Speech recognition not supported in this browser")
     }
 
     try {
-      // Request microphone permission and start recording
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000, // ElevenLabs prefers 16kHz
-          channelCount: 1, // Mono audio
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      })
+      // Create speech recognition instance
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      this.recognition = new SpeechRecognition()
 
-      // Check if MediaRecorder supports the format we need
-      const options: MediaRecorderOptions = {}
-      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
-        options.mimeType = "audio/webm;codecs=opus"
-      } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
-        options.mimeType = "audio/mp4"
-      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
-        options.mimeType = "audio/webm"
-      }
+      // Configure recognition settings
+      this.recognition.continuous = false
+      this.recognition.interimResults = false
+      this.recognition.lang = this.config?.language || 'en-US'
+      this.recognition.maxAlternatives = 1
 
-      this.mediaRecorder = new MediaRecorder(this.stream, options)
-      this.audioChunks = []
       this.isRecording = true
+      console.log("Voice recording started with Web Speech API")
 
-      this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          this.audioChunks.push(event.data)
-        }
-      }
-
-      this.mediaRecorder.start(100) // Collect data every 100ms
-      console.log("Voice recording started with ElevenLabs")
+      // Start recognition
+      this.recognition.start()
     } catch (error) {
       console.error("Error starting voice recording:", error)
       this.cleanup()
@@ -83,132 +62,98 @@ export class VoiceService {
     }
   }
 
-  // Stop recording and convert to text using ElevenLabs
+  // Stop recording and get result
   static async stopRecording(): Promise<SpeechToTextResult> {
-    if (!this.isRecording || !this.mediaRecorder) {
+    if (!this.isRecording || !this.recognition) {
       throw new Error("Not currently recording")
     }
 
-    if (!this.config?.apiKey) {
-      throw new Error("ElevenLabs API key not configured")
-    }
-
     return new Promise((resolve, reject) => {
-      if (!this.mediaRecorder) {
-        reject(new Error("MediaRecorder not available"))
+      if (!this.recognition) {
+        reject(new Error("Speech recognition not available"))
         return
       }
 
-      this.mediaRecorder.onstop = async () => {
+      // Set up event handlers
+      this.recognition.onresult = (event) => {
         try {
           this.isRecording = false
+          
+          if (event.results.length > 0) {
+            const result = event.results[0]
+            const transcript = result[0].transcript
+            const confidence = result[0].confidence || 0.9
 
-          // Create audio blob from recorded chunks
-          const audioBlob = new Blob(this.audioChunks, {
-            type: this.mediaRecorder?.mimeType || "audio/webm",
-          })
+            console.log("Speech recognition result:", { transcript, confidence })
 
-          console.log("Audio recorded:", {
-            size: audioBlob.size,
-            type: audioBlob.type,
-            duration: "unknown",
-          })
-
-          // Convert to text using ElevenLabs Speech-to-Text API
-          const result = await this.speechToTextWithElevenLabs(audioBlob)
-          resolve(result)
+            if (transcript && transcript.trim().length > 0) {
+              resolve({
+                text: transcript.trim(),
+                confidence: confidence,
+              })
+            } else {
+              reject(new Error("No speech detected. Please try speaking more clearly."))
+            }
+          } else {
+            reject(new Error("No speech detected. Please try again."))
+          }
         } catch (error) {
-          console.error("Error processing voice recording:", error)
-          reject(error)
+          console.error("Error processing speech result:", error)
+          reject(new Error("Failed to process speech recognition result"))
         } finally {
           this.cleanup()
         }
       }
 
-      this.mediaRecorder.onerror = (event) => {
-        console.error("MediaRecorder error:", event)
+      this.recognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error)
+        this.isRecording = false
         this.cleanup()
-        reject(new Error("Recording failed"))
-      }
-
-      this.mediaRecorder.stop()
-    })
-  }
-
-  // Use ElevenLabs Speech-to-Text API
-  private static async speechToTextWithElevenLabs(audioBlob: Blob): Promise<SpeechToTextResult> {
-    try {
-      console.log("Sending audio to server-side ElevenLabs Speech-to-Text API...")
-
-      // Create FormData for our server API
-      const formData = new FormData()
-      const audioFile = new File([audioBlob], "recording.webm", {
-        type: audioBlob.type,
-      })
-
-      formData.append("audio", audioFile)
-      formData.append("model", this.config?.model || "eleven_multilingual_v2")
-
-      // Call our server-side API instead of ElevenLabs directly
-      const response = await fetch("/api/voice/speech-to-text", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Server Speech-to-Text API error:", response.status, errorData)
 
         let errorMessage = "Speech recognition failed"
-        if (response.status === 401) {
-          errorMessage = "Invalid ElevenLabs API key"
-        } else if (response.status === 400) {
-          errorMessage = errorData.error || "Audio format not supported or audio too short"
-        } else if (response.status === 429) {
-          errorMessage = "Rate limit exceeded. Please try again in a moment."
-        } else {
-          errorMessage = errorData.error || `Speech recognition error: ${response.status}`
+        switch (event.error) {
+          case 'no-speech':
+            errorMessage = "No speech detected. Please try speaking more clearly."
+            break
+          case 'audio-capture':
+            errorMessage = "Microphone not accessible. Please check permissions."
+            break
+          case 'not-allowed':
+            errorMessage = "Microphone permission denied. Please allow microphone access."
+            break
+          case 'network':
+            errorMessage = "Network error. Please check your internet connection."
+            break
+          case 'aborted':
+            errorMessage = "Speech recognition was cancelled."
+            break
+          default:
+            errorMessage = `Speech recognition error: ${event.error}`
         }
 
-        throw new Error(errorMessage)
+        reject(new Error(errorMessage))
       }
 
-      const result = await response.json()
-      console.log("Server Speech-to-Text result:", result)
-
-      const transcription = result.text || ""
-
-      if (!transcription || transcription.trim().length === 0) {
-        throw new Error("No speech detected. Please try speaking more clearly.")
+      this.recognition.onend = () => {
+        console.log("Speech recognition ended")
+        this.isRecording = false
       }
 
-      return {
-        text: transcription.trim(),
-        confidence: result.confidence || 0.9,
+      // Stop recognition if it's running
+      if (this.isRecording) {
+        this.recognition.stop()
       }
-    } catch (error) {
-      console.error("Speech-to-Text error:", error)
-
-      if (error instanceof Error) {
-        throw error
-      }
-
-      throw new Error("Speech recognition failed. Please try again.")
-    }
+    })
   }
 
   // Clean up resources
   private static cleanup(): void {
-    if (this.stream) {
-      this.stream.getTracks().forEach((track) => {
-        track.stop()
-        console.log("Stopped audio track:", track.kind)
-      })
-      this.stream = null
+    if (this.recognition) {
+      this.recognition.onresult = null
+      this.recognition.onerror = null
+      this.recognition.onend = null
+      this.recognition = null
     }
-
-    this.mediaRecorder = null
-    this.audioChunks = []
   }
 
   // Check if currently recording
@@ -218,43 +163,57 @@ export class VoiceService {
 
   // Cancel current recording
   static cancelRecording(): void {
-    if (this.mediaRecorder && this.isRecording) {
-      this.mediaRecorder.stop()
+    if (this.recognition && this.isRecording) {
+      this.recognition.abort()
       this.isRecording = false
       console.log("Voice recording cancelled")
     }
     this.cleanup()
   }
 
-  // Get supported audio formats (for debugging)
-  static getSupportedFormats(): string[] {
-    const formats = [
-      "audio/webm;codecs=opus",
-      "audio/webm;codecs=vp8,opus",
-      "audio/webm",
-      "audio/mp4",
-      "audio/mp4;codecs=mp4a.40.2",
-      "audio/mpeg",
-      "audio/wav",
+  // Get supported languages (for debugging)
+  static getSupportedLanguages(): string[] {
+    return [
+      'en-US', // English (US)
+      'en-GB', // English (UK)
+      'en-AU', // English (Australia)
+      'en-CA', // English (Canada)
+      'es-ES', // Spanish (Spain)
+      'es-MX', // Spanish (Mexico)
+      'fr-FR', // French (France)
+      'de-DE', // German (Germany)
+      'it-IT', // Italian (Italy)
+      'pt-BR', // Portuguese (Brazil)
+      'ja-JP', // Japanese (Japan)
+      'ko-KR', // Korean (South Korea)
+      'zh-CN', // Chinese (Simplified)
+      'zh-TW', // Chinese (Traditional)
     ]
-
-    return formats.filter((format) => MediaRecorder.isTypeSupported(format))
   }
 
-  // Set ElevenLabs model for speech recognition
-  static setModel(model: string): void {
+  // Set language for speech recognition
+  static setLanguage(language: string): void {
     if (this.config) {
-      this.config.model = model
+      this.config.language = language
     }
   }
 
-  // Get available ElevenLabs models
-  static getAvailableModels(): string[] {
-    return [
-      "eleven_multilingual_v2", // Default - supports multiple languages
-      "eleven_english_v2", // English only, potentially more accurate
-      "eleven_multilingual_v1", // Legacy multilingual
-      "eleven_english_v1", // Legacy English
-    ]
+  // Check browser support
+  static getBrowserSupport(): { supported: boolean; api: string } {
+    if ('SpeechRecognition' in window) {
+      return { supported: true, api: 'SpeechRecognition' }
+    } else if ('webkitSpeechRecognition' in window) {
+      return { supported: true, api: 'webkitSpeechRecognition' }
+    } else {
+      return { supported: false, api: 'none' }
+    }
+  }
+}
+
+// Extend Window interface for TypeScript
+declare global {
+  interface Window {
+    SpeechRecognition: typeof SpeechRecognition
+    webkitSpeechRecognition: typeof SpeechRecognition
   }
 }
