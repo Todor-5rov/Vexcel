@@ -7,18 +7,6 @@ export interface DataManipulationCommand {
   description: string
 }
 
-export interface AIProcessRequest {
-  message: string
-  fileData?: any
-  fileName?: string
-}
-
-export interface AIProcessResponse {
-  response: string
-  success: boolean
-  error?: string
-}
-
 export class AIService {
   private static getOpenAIClient() {
     const apiKey = process.env.OPENAI_API_KEY
@@ -113,8 +101,8 @@ Work with the file and provide a helpful, conversational response about what you
         filename,
         async () => {
           // This is the MCP operation wrapped in the sync workflow
-          const openaiClient = this.getOpenAIClient()
-          return await openaiClient.responses.create({
+          const openai = this.getOpenAIClient()
+          return await openai.responses.create({
             model: "gpt-4o",
             tools: [
               {
@@ -311,113 +299,4 @@ Work with the file and provide a helpful, conversational response about what you
       }
     }
   }
-
-  static async processExcelQuery(query: string, data: any[]): Promise<string> {
-    try {
-      const openaiClient = this.getOpenAIClient()
-      const response = await openaiClient.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an Excel expert. Help users analyze and manipulate their Excel data based on their queries. Provide clear, actionable responses.",
-          },
-          {
-            role: "user",
-            content: `Query: ${query}\n\nData sample: ${JSON.stringify(data.slice(0, 5))}`,
-          },
-        ],
-        max_tokens: 500,
-        temperature: 0.7,
-      })
-
-      return response.choices[0]?.message?.content || "I couldn't process your request. Please try again."
-    } catch (error) {
-      console.error("AI Service Error:", error)
-      return "Sorry, I encountered an error processing your request. Please try again."
-    }
-  }
-
-  static async generateExcelFormula(description: string): Promise<string> {
-    try {
-      const openaiClient = this.getOpenAIClient()
-      const response = await openaiClient.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an Excel formula expert. Generate Excel formulas based on user descriptions. Only return the formula, no explanations.",
-          },
-          {
-            role: "user",
-            content: description,
-          },
-        ],
-        max_tokens: 200,
-        temperature: 0.3,
-      })
-
-      return response.choices[0]?.message?.content || "=SUM(A1:A10)"
-    } catch (error) {
-      console.error("Formula Generation Error:", error)
-      return "=SUM(A1:A10)"
-    }
-  }
-
-  static async processWithAI(request: AIProcessRequest): Promise<AIProcessResponse> {
-    try {
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OpenAI API key not configured")
-      }
-
-      let systemPrompt = `You are VExcel, an AI assistant specialized in Excel data analysis and manipulation. 
-      You help users understand, analyze, and work with their Excel data through natural language commands.
-      
-      When users ask about their data, provide clear, actionable insights and suggestions.
-      If they want to perform operations, explain what you would do step by step.
-      
-      Be helpful, accurate, and focus on practical Excel-related tasks.`
-
-      if (request.fileData && request.fileName) {
-        systemPrompt += `\n\nThe user has uploaded a file: ${request.fileName}
-        Here's a sample of their data: ${JSON.stringify(request.fileData).slice(0, 1000)}...`
-      }
-
-      const openaiClient = this.getOpenAIClient()
-      const completion = await openaiClient.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: request.message,
-          },
-        ],
-        max_tokens: 1000,
-        temperature: 0.7,
-      })
-
-      const response = completion.choices[0]?.message?.content || "I couldn't process your request."
-
-      return {
-        response,
-        success: true,
-      }
-    } catch (error) {
-      console.error("AI processing error:", error)
-      return {
-        response: "I'm sorry, I encountered an error processing your request.",
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      }
-    }
-  }
 }
-
-// Export the processWithAI function as a named export
-export const processWithAI = AIService.processWithAI
