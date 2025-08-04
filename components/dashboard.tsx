@@ -276,7 +276,7 @@ export default function Dashboard({ user, onAuthChange }: DashboardProps) {
                   </h1>
                   <p className="text-primary-100 text-lg">
                     Ready to transform your Excel files with AI? Upload a new file or continue working with your
-                    existing data. Now with voice commands and interactive OneDrive embedding!
+                    existing data. Now with interactive OneDrive embedding!
                   </p>
                 </div>
               </div>
@@ -320,7 +320,6 @@ export default function Dashboard({ user, onAuthChange }: DashboardProps) {
                 fileId={selectedFileId}
                 mcpFilePath={selectedMcpFilePath}
                 onRefreshData={handleDataRefresh}
-                userId={user.id}
               />
             </div>
 
