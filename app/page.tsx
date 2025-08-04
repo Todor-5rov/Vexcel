@@ -36,16 +36,8 @@ export default function Home() {
   }
 
   if (!user) {
-    return (
-      <main className="min-h-screen bg-background">
-        <LandingPage onAuthChange={setUser} />
-      </main>
-    )
+    return <LandingPage onAuthChange={setUser} />
   }
 
-  return (
-    <main className="min-h-screen bg-background">
-      <Dashboard user={user} onAuthChange={setUser} />
-    </main>
-  )
+  return <Dashboard user={user} onAuthChange={setUser} />
 }

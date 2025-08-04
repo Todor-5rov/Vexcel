@@ -1,7 +1,5 @@
 import OpenAI from "openai"
 import { FileSyncService } from "./file-sync-service"
-import { generateText } from 'ai'
-import { openai } from '@ai-sdk/openai'
 
 export interface DataManipulationCommand {
   action: string
@@ -17,108 +15,6 @@ export class AIService {
       throw new Error("OpenAI API key is not configured. Please add OPENAI_API_KEY to your environment variables.")
     }
     return new OpenAI({ apiKey })
-  }
-
-  async processQuery(
-    query: string,
-    data: any[][],
-    headers: string[],
-    fileName: string,
-    previousMessages?: any[]
-  ): Promise<string> {
-    try {
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error('OpenAI API key not configured')
-      }
-
-      // Build context about the data
-      const dataContext = this.buildDataContext(data, headers, fileName)
-      
-      // Build conversation context
-      const conversationContext = this.buildConversationContext(previousMessages)
-
-      const prompt = `You are an AI assistant specialized in Excel data analysis. 
-
-${dataContext}
-
-${conversationContext}
-
-User Query: ${query}
-
-Please provide a helpful response about the data. If the user is asking for calculations, analysis, or insights, provide specific answers based on the actual data. If they're asking for operations like sorting or filtering, explain what would happen and provide the results if possible.
-
-Keep your response conversational and helpful. Focus on actionable insights and clear explanations.`
-
-      const { text } = await generateText({
-        model: openai('gpt-4'),
-        prompt,
-        maxTokens: 1000,
-        temperature: 0.7,
-      })
-
-      return text
-    } catch (error) {
-      console.error('AI Service Error:', error)
-      throw new Error('Failed to process your request. Please try again.')
-    }
-  }
-
-  private buildDataContext(data: any[][], headers: string[], fileName: string): string {
-    if (!data || data.length === 0) {
-      return `File: ${fileName}\nNo data available.`
-    }
-
-    const sampleRows = data.slice(0, 5)
-    const totalRows = data.length
-    
-    let context = `File: ${fileName}
-Total Rows: ${totalRows}
-Columns: ${headers.join(', ')}
-
-Sample Data (first 5 rows):
-${headers.join(' | ')}
-${sampleRows.map(row => row.join(' | ')).join('\n')}`
-
-    // Add basic statistics for numeric columns
-    const numericStats = this.calculateBasicStats(data, headers)
-    if (numericStats.length > 0) {
-      context += '\n\nNumeric Column Statistics:\n' + numericStats.join('\n')
-    }
-
-    return context
-  }
-
-  private buildConversationContext(previousMessages?: any[]): string {
-    if (!previousMessages || previousMessages.length === 0) {
-      return ''
-    }
-
-    const recentMessages = previousMessages.slice(-4) // Last 4 messages for context
-    const context = recentMessages
-      .map(msg => `${msg.role}: ${msg.content}`)
-      .join('\n')
-
-    return `Previous conversation context:\n${context}\n`
-  }
-
-  private calculateBasicStats(data: any[][], headers: string[]): string[] {
-    const stats: string[] = []
-    
-    headers.forEach((header, index) => {
-      const column = data.map(row => row[index]).filter(val => val !== null && val !== undefined && val !== '')
-      const numericValues = column.filter(val => !isNaN(Number(val))).map(val => Number(val))
-      
-      if (numericValues.length > 0) {
-        const sum = numericValues.reduce((a, b) => a + b, 0)
-        const avg = sum / numericValues.length
-        const min = Math.min(...numericValues)
-        const max = Math.max(...numericValues)
-        
-        stats.push(`${header}: Min=${min}, Max=${max}, Average=${avg.toFixed(2)}, Count=${numericValues.length}`)
-      }
-    })
-    
-    return stats
   }
 
   static async processCommand(
@@ -205,8 +101,8 @@ Work with the file and provide a helpful, conversational response about what you
         filename,
         async () => {
           // This is the MCP operation wrapped in the sync workflow
-          const openaiClient = this.getOpenAIClient()
-          return await openaiClient.responses.create({
+          const openai = this.getOpenAIClient()
+          return await openai.responses.create({
             model: "gpt-4o",
             tools: [
               {
@@ -329,8 +225,8 @@ Work with the file and provide a helpful, conversational response about what you
 
       // Clean up the response text
       responseText = responseText
-        .replace(/\`\`\`[\w]*\n?/g, "") // Remove code blocks
-        .replace(/\`\`\`/g, "")
+        .replace(/```[\w]*\n?/g, "") // Remove code blocks
+        .replace(/```/g, "")
         .replace(/\*\*(.*?)\*\*/g, "$1") // Remove bold markdown
         .replace(/\*(.*?)\*/g, "$1") // Remove italic markdown
         .replace(/`([^`]+)`/g, "$1") // Remove inline code
@@ -393,7 +289,7 @@ Work with the file and provide a helpful, conversational response about what you
         console.error("Detailed error:", error.message, error.stack)
 
         return {
-          response: `I encountered an error while processing your request: ${error.message}. Please try rephrasing your request or breaking it down into smaller steps.`,
+          response: `I encountered an error while processing your request: ${error.message}. Please try rephrasing your request or try a simpler operation first.`,
         }
       }
 

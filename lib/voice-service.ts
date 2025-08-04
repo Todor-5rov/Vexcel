@@ -1,148 +1,170 @@
+export interface SpeechToTextResult {
+  text: string
+  confidence?: number
+  error?: string
+}
+
 export class VoiceService {
-  private recognition: SpeechRecognition | null = null;
-  private isListening = false;
+  private static mediaRecorder: MediaRecorder | null = null
+  private static recognition: any = null
+  private static isRecording = false
+  private static isListening = false
 
-  constructor() {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        this.recognition = new SpeechRecognition();
-        this.recognition.continuous = false;
-        this.recognition.interimResults = false;
-        this.recognition.lang = 'en-US';
+  // Check if voice service is available
+  static isAvailable(): boolean {
+    return !!(
+      ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) &&
+      navigator.mediaDevices &&
+      navigator.mediaDevices.getUserMedia
+    )
+  }
+
+  // Start voice recording for speech-to-text using Web Speech API
+  static async startRecording(): Promise<void> {
+    if (this.isRecording || this.isListening) {
+      throw new Error("Already recording or listening")
+    }
+
+    try {
+      // Request microphone permission first
+      await navigator.mediaDevices.getUserMedia({ audio: true })
+
+      // @ts-ignore - Web Speech API types
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+
+      if (!SpeechRecognition) {
+        throw new Error("Speech recognition not supported in this browser")
       }
+
+      this.recognition = new SpeechRecognition()
+      this.recognition.continuous = false
+      this.recognition.interimResults = false
+      this.recognition.lang = "en-US"
+      this.recognition.maxAlternatives = 1
+
+      this.isListening = true
+      this.isRecording = true
+
+      console.log("Voice recording started")
+      this.recognition.start()
+    } catch (error) {
+      console.error("Error starting voice recording:", error)
+      this.isRecording = false
+      this.isListening = false
+      throw new Error("Failed to start voice recording. Please check microphone permissions.")
     }
   }
 
-  isSupported(): boolean {
-    return this.recognition !== null;
-  }
-
-  async startListening(): Promise<string> {
-    if (!this.recognition) {
-      throw new Error('Speech recognition not supported');
-    }
-
-    if (this.isListening) {
-      throw new Error('Already listening');
+  // Stop recording and get the result
+  static async stopRecording(): Promise<SpeechToTextResult> {
+    if (!this.isRecording || !this.recognition) {
+      throw new Error("Not currently recording")
     }
 
     return new Promise((resolve, reject) => {
       if (!this.recognition) {
-        reject(new Error('Speech recognition not available'));
-        return;
+        reject(new Error("Speech recognition not available"))
+        return
       }
 
-      this.isListening = true;
+      this.recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript
+        const confidence = event.results[0][0].confidence
 
-      this.recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        this.isListening = false;
-        resolve(transcript);
-      };
+        console.log("Speech recognition result:", transcript, "Confidence:", confidence)
 
-      this.recognition.onerror = (event) => {
-        this.isListening = false;
-        let errorMessage = 'Speech recognition error';
-        
+        this.isRecording = false
+        this.isListening = false
+
+        resolve({
+          text: transcript.trim(),
+          confidence: confidence,
+        })
+      }
+
+      this.recognition.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error)
+        this.isRecording = false
+        this.isListening = false
+
+        let errorMessage = "Speech recognition failed"
         switch (event.error) {
-          case 'no-speech':
-            errorMessage = 'No speech detected. Please try again.';
-            break;
-          case 'audio-capture':
-            errorMessage = 'Microphone not accessible. Please check permissions.';
-            break;
-          case 'not-allowed':
-            errorMessage = 'Microphone access denied. Please allow microphone access.';
-            break;
-          case 'network':
-            errorMessage = 'Network error occurred during speech recognition.';
-            break;
+          case "no-speech":
+            errorMessage = "No speech detected. Please try again."
+            break
+          case "audio-capture":
+            errorMessage = "Microphone not accessible. Please check permissions."
+            break
+          case "not-allowed":
+            errorMessage = "Microphone permission denied. Please allow microphone access."
+            break
+          case "network":
+            errorMessage = "Network error. Please check your connection."
+            break
           default:
-            errorMessage = `Speech recognition error: ${event.error}`;
+            errorMessage = `Speech recognition failed: ${event.error}`
         }
-        
-        reject(new Error(errorMessage));
-      };
+
+        reject(new Error(errorMessage))
+      }
 
       this.recognition.onend = () => {
-        this.isListening = false;
-      };
+        console.log("Speech recognition ended")
+        this.isListening = false
 
-      try {
-        this.recognition.start();
-      } catch (error) {
-        this.isListening = false;
-        reject(error);
+        // If we haven't resolved yet, it means no result was captured
+        if (this.isRecording) {
+          this.isRecording = false
+          reject(new Error("No speech detected. Please try again."))
+        }
       }
-    });
+
+      // Stop the recognition
+      this.recognition.stop()
+    })
   }
 
-  stopListening(): void {
-    if (this.recognition && this.isListening) {
-      this.recognition.stop();
-      this.isListening = false;
+  // Check if currently recording
+  static getIsRecording(): boolean {
+    return this.isRecording
+  }
+
+  // Check if currently listening (for UI feedback)
+  static getIsListening(): boolean {
+    return this.isListening
+  }
+
+  // Cancel current recording
+  static cancelRecording(): void {
+    if (this.recognition && (this.isRecording || this.isListening)) {
+      this.recognition.abort()
+      this.isRecording = false
+      this.isListening = false
+      console.log("Voice recording cancelled")
     }
   }
 
-  getIsListening(): boolean {
-    return this.isListening;
+  // Get supported languages (optional feature)
+  static getSupportedLanguages(): string[] {
+    return [
+      "en-US", // English (US)
+      "en-GB", // English (UK)
+      "es-ES", // Spanish
+      "fr-FR", // French
+      "de-DE", // German
+      "it-IT", // Italian
+      "pt-BR", // Portuguese (Brazil)
+      "ru-RU", // Russian
+      "ja-JP", // Japanese
+      "ko-KR", // Korean
+      "zh-CN", // Chinese (Simplified)
+    ]
+  }
+
+  // Set language for speech recognition
+  static setLanguage(language: string): void {
+    if (this.recognition) {
+      this.recognition.lang = language
+    }
   }
 }
-
-// Global instance
-let voiceServiceInstance: VoiceService | null = null;
-
-export function getVoiceService(): VoiceService {
-  if (!voiceServiceInstance) {
-    voiceServiceInstance = new VoiceService();
-  }
-  return voiceServiceInstance;
-}
-
-// Type declarations for Web Speech API
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
-  }
-}
-
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start(): void;
-  stop(): void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-}
-
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-}
-
-interface SpeechRecognitionResultList {
-  [index: number]: SpeechRecognitionResult;
-  length: number;
-}
-
-interface SpeechRecognitionResult {
-  [index: number]: SpeechRecognitionAlternative;
-  length: number;
-}
-
-interface SpeechRecognitionAlternative {
-  transcript: string;
-  confidence: number;
-}
-
-declare var SpeechRecognition: {
-  prototype: SpeechRecognition;
-  new(): SpeechRecognition;
-};

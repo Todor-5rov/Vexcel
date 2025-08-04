@@ -1,148 +1,185 @@
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-export const supabase = createClient(supabaseUrl, supabaseKey)
+import { supabase } from "./supabase"
 
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant'
+  role: "user" | "assistant"
   content: string
-  messageType?: 'normal' | 'error'
-  voiceInput?: boolean
+  messageType: "normal" | "suggestion" | "error"
+  voiceInput: boolean
   timestamp: Date
 }
 
 export interface ChatSession {
   id: string
-  user_id: string
-  file_id: string
-  file_name: string
-  created_at: string
-  updated_at: string
-  message_count: number
+  fileId: string
+  title?: string
+  messageCount: number
+  lastMessageAt: Date
+  createdAt: Date
 }
 
 export class ChatService {
+  // Get or create chat session for a file
   static async getOrCreateSession(userId: string, fileId: string): Promise<string> {
     try {
-      // First try to get existing session
-      const { data: existingSession, error: fetchError } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('file_id', fileId)
-        .limit(1)
+      // First, try to find existing session
+      const { data: existingSession, error: findError } = await supabase
+        .from("chat_sessions")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("file_id", fileId)
         .single()
 
-      if (existingSession && !fetchError) {
+      if (existingSession && !findError) {
+        console.log("Found existing chat session:", existingSession.id)
         return existingSession.id
       }
 
-      // Create new session if none exists
+      // Create new session
       const { data: newSession, error: createError } = await supabase
-        .from('chat_sessions')
+        .from("chat_sessions")
         .insert({
           user_id: userId,
           file_id: fileId,
-          file_name: fileId, // Use fileId as filename for now
-          message_count: 0
+          message_count: 0,
         })
-        .select()
+        .select("id")
         .single()
 
       if (createError) {
-        console.error('Error creating chat session:', createError)
-        return `temp-${Date.now()}`
+        throw createError
       }
 
+      console.log("Created new chat session:", newSession.id)
       return newSession.id
     } catch (error) {
-      console.error('Error in getOrCreateSession:', error)
-      return `temp-${Date.now()}`
+      console.error("Error getting/creating chat session:", error)
+      throw error
     }
   }
 
+  // Load chat messages for a session
   static async loadMessages(sessionId: string): Promise<ChatMessage[]> {
-    if (sessionId.startsWith('temp-')) {
-      return []
-    }
-
     try {
       const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('created_at', { ascending: true })
+        .from("chat_messages")
+        .select("*")
+        .eq("session_id", sessionId)
+        .order("created_at", { ascending: true })
 
       if (error) {
-        console.error('Error loading messages:', error)
-        return []
+        throw error
       }
 
-      return data.map(msg => ({
+      return (data || []).map((msg) => ({
         id: msg.id,
-        role: msg.role as 'user' | 'assistant',
+        role: msg.role,
         content: msg.content,
-        messageType: msg.message_type || 'normal',
-        voiceInput: msg.voice_input || false,
-        timestamp: new Date(msg.created_at)
+        messageType: msg.message_type as "normal" | "suggestion" | "error",
+        voiceInput: msg.voice_input,
+        timestamp: new Date(msg.created_at),
       }))
     } catch (error) {
-      console.error('Error loading messages:', error)
+      console.error("Error loading chat messages:", error)
       return []
     }
   }
 
+  // Save a new message
   static async saveMessage(
-    sessionId: string, 
-    role: 'user' | 'assistant', 
+    sessionId: string,
+    role: "user" | "assistant",
     content: string,
-    metadata?: { messageType?: string; voiceInput?: boolean }
-  ): Promise<void> {
-    if (sessionId.startsWith('temp-')) {
-      return
-    }
-
+    options: {
+      messageType?: "normal" | "suggestion" | "error"
+      voiceInput?: boolean
+    } = {},
+  ): Promise<string> {
     try {
-      const { error } = await supabase
-        .from('chat_messages')
+      const { data, error } = await supabase
+        .from("chat_messages")
         .insert({
           session_id: sessionId,
           role,
           content,
-          message_type: metadata?.messageType || 'normal',
-          voice_input: metadata?.voiceInput || false
+          message_type: options.messageType || "normal",
+          voice_input: options.voiceInput || false,
         })
+        .select("id")
+        .single()
 
       if (error) {
-        console.error('Error saving message:', error)
+        throw error
       }
+
+      console.log("Saved chat message:", data.id)
+      return data.id
     } catch (error) {
-      console.error('Error saving message:', error)
+      console.error("Error saving chat message:", error)
+      throw error
     }
   }
 
-  static createWelcomeMessage(filename?: string, dataLength?: number, headers?: string[]): ChatMessage {
-    let content = "👋 Hello! I'm your AI Excel assistant."
-    
-    if (filename && dataLength && headers) {
-      content += `\n\nI can see you've loaded "${filename}" with ${dataLength} rows and ${headers.length} columns (${headers.slice(0, 3).join(', ')}${headers.length > 3 ? '...' : ''}).`
-      content += "\n\nI can help you with:\n• Data analysis and insights\n• Calculations and formulas\n• Sorting and filtering\n• Creating charts and summaries\n• And much more!"
-    } else {
-      content += "\n\nPlease upload an Excel file to get started. I can help you analyze data, create formulas, generate insights, and perform various Excel operations through natural language commands."
-    }
-    
-    content += "\n\nWhat would you like to do with your data?"
+  // Get chat sessions for a user
+  static async getUserSessions(userId: string): Promise<ChatSession[]> {
+    try {
+      const { data, error } = await supabase
+        .from("chat_sessions")
+        .select(`
+          id,
+          file_id,
+          title,
+          message_count,
+          last_message_at,
+          created_at,
+          user_files!inner(file_name)
+        `)
+        .eq("user_id", userId)
+        .order("last_message_at", { ascending: false })
 
-    return {
-      id: 'welcome-' + Date.now(),
-      role: 'assistant',
-      content,
-      messageType: 'normal',
-      voiceInput: false,
-      timestamp: new Date()
+      if (error) {
+        throw error
+      }
+
+      return (data || []).map((session) => ({
+        id: session.id,
+        fileId: session.file_id,
+        title: session.title || `Chat with ${(session.user_files as any)?.file_name || "Unknown File"}`,
+        messageCount: session.message_count,
+        lastMessageAt: new Date(session.last_message_at),
+        createdAt: new Date(session.created_at),
+      }))
+    } catch (error) {
+      console.error("Error getting user sessions:", error)
+      return []
+    }
+  }
+
+  // Delete a chat session and all its messages
+  static async deleteSession(sessionId: string, userId: string): Promise<void> {
+    try {
+      // Verify ownership
+      const { data: session, error: verifyError } = await supabase
+        .from("chat_sessions")
+        .select("user_id")
+        .eq("id", sessionId)
+        .single()
+
+      if (verifyError || session?.user_id !== userId) {
+        throw new Error("Session not found or access denied")
+      }
+
+      // Delete session (messages will be deleted automatically due to CASCADE)
+      const { error } = await supabase.from("chat_sessions").delete().eq("id", sessionId)
+
+      if (error) {
+        throw error
+      }
+
+      console.log("Deleted chat session:", sessionId)
+    } catch (error) {
+      console.error("Error deleting chat session:", error)
+      throw error
     }
   }
 }
