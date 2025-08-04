@@ -1,10 +1,6 @@
 import OpenAI from "openai"
 import { FileSyncService } from "./file-sync-service"
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
-
 export interface DataManipulationCommand {
   action: string
   parameters: Record<string, any>
@@ -305,7 +301,7 @@ Work with the file and provide a helpful, conversational response about what you
         console.error("Detailed error:", error.message, error.stack)
 
         return {
-          response: `I encountered an error while processing your request: ${error.message}. Please try rephrasing your request or breaking it down into smaller steps.`,
+          response: `I encountered an error while processing your request: ${error.message}. Please try rephrasing your request or try a simpler operation first.`,
         }
       }
 
@@ -318,7 +314,8 @@ Work with the file and provide a helpful, conversational response about what you
 
   static async processExcelQuery(query: string, data: any[]): Promise<string> {
     try {
-      const response = await openai.chat.completions.create({
+      const openaiClient = this.getOpenAIClient()
+      const response = await openaiClient.chat.completions.create({
         model: "gpt-4",
         messages: [
           {
@@ -344,7 +341,8 @@ Work with the file and provide a helpful, conversational response about what you
 
   static async generateExcelFormula(description: string): Promise<string> {
     try {
-      const response = await openai.chat.completions.create({
+      const openaiClient = this.getOpenAIClient()
+      const response = await openaiClient.chat.completions.create({
         model: "gpt-4",
         messages: [
           {
@@ -387,7 +385,8 @@ Work with the file and provide a helpful, conversational response about what you
         Here's a sample of their data: ${JSON.stringify(request.fileData).slice(0, 1000)}...`
       }
 
-      const completion = await openai.chat.completions.create({
+      const openaiClient = this.getOpenAIClient()
+      const completion = await openaiClient.chat.completions.create({
         model: "gpt-4",
         messages: [
           {
@@ -419,3 +418,6 @@ Work with the file and provide a helpful, conversational response about what you
     }
   }
 }
+
+// Export the processWithAI function as a named export
+export const processWithAI = AIService.processWithAI
