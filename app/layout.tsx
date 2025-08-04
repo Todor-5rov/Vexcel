@@ -9,11 +9,6 @@ export const metadata: Metadata = {
   generator: "VExcel",
   keywords: ["Excel", "AI", "Voice Commands", "Spreadsheet", "Data Analysis", "Natural Language"],
   authors: [{ name: "VExcel Team" }],
-  icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-    apple: "/favicon.ico",
-  },
 }
 
 export default function RootLayout({
@@ -23,9 +18,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-      </head>
       <body>{children}</body>
     </html>
   )
