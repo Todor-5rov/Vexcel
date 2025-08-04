@@ -1,6 +1,10 @@
 import OpenAI from "openai"
 import { FileSyncService } from "./file-sync-service"
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
+
 export interface DataManipulationCommand {
   action: string
   parameters: Record<string, any>
@@ -101,8 +105,8 @@ Work with the file and provide a helpful, conversational response about what you
         filename,
         async () => {
           // This is the MCP operation wrapped in the sync workflow
-          const openai = this.getOpenAIClient()
-          return await openai.responses.create({
+          const openaiClient = this.getOpenAIClient()
+          return await openaiClient.responses.create({
             model: "gpt-4o",
             tools: [
               {
@@ -297,6 +301,58 @@ Work with the file and provide a helpful, conversational response about what you
         response:
           "I'm having trouble processing that request right now. Could you try rephrasing it or breaking it down into smaller steps?",
       }
+    }
+  }
+
+  static async processExcelQuery(query: string, data: any[]): Promise<string> {
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an Excel expert. Help users analyze and manipulate their Excel data based on their queries. Provide clear, actionable responses.",
+          },
+          {
+            role: "user",
+            content: `Query: ${query}\n\nData sample: ${JSON.stringify(data.slice(0, 5))}`,
+          },
+        ],
+        max_tokens: 500,
+        temperature: 0.7,
+      })
+
+      return response.choices[0]?.message?.content || "I couldn't process your request. Please try again."
+    } catch (error) {
+      console.error("AI Service Error:", error)
+      return "Sorry, I encountered an error processing your request. Please try again."
+    }
+  }
+
+  static async generateExcelFormula(description: string): Promise<string> {
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an Excel formula expert. Generate Excel formulas based on user descriptions. Only return the formula, no explanations.",
+          },
+          {
+            role: "user",
+            content: description,
+          },
+        ],
+        max_tokens: 200,
+        temperature: 0.3,
+      })
+
+      return response.choices[0]?.message?.content || "=SUM(A1:A10)"
+    } catch (error) {
+      console.error("Formula Generation Error:", error)
+      return "=SUM(A1:A10)"
     }
   }
 }
