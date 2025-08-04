@@ -11,6 +11,18 @@ export interface DataManipulationCommand {
   description: string
 }
 
+export interface AIProcessRequest {
+  message: string
+  fileData?: any
+  fileName?: string
+}
+
+export interface AIProcessResponse {
+  response: string
+  success: boolean
+  error?: string
+}
+
 export class AIService {
   private static getOpenAIClient() {
     const apiKey = process.env.OPENAI_API_KEY
@@ -293,7 +305,7 @@ Work with the file and provide a helpful, conversational response about what you
         console.error("Detailed error:", error.message, error.stack)
 
         return {
-          response: `I encountered an error while processing your request: ${error.message}. Please try rephrasing your request or try a simpler operation first.`,
+          response: `I encountered an error while processing your request: ${error.message}. Please try rephrasing your request or breaking it down into smaller steps.`,
         }
       }
 
@@ -353,6 +365,57 @@ Work with the file and provide a helpful, conversational response about what you
     } catch (error) {
       console.error("Formula Generation Error:", error)
       return "=SUM(A1:A10)"
+    }
+  }
+
+  static async processWithAI(request: AIProcessRequest): Promise<AIProcessResponse> {
+    try {
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error("OpenAI API key not configured")
+      }
+
+      let systemPrompt = `You are VExcel, an AI assistant specialized in Excel data analysis and manipulation. 
+      You help users understand, analyze, and work with their Excel data through natural language commands.
+      
+      When users ask about their data, provide clear, actionable insights and suggestions.
+      If they want to perform operations, explain what you would do step by step.
+      
+      Be helpful, accurate, and focus on practical Excel-related tasks.`
+
+      if (request.fileData && request.fileName) {
+        systemPrompt += `\n\nThe user has uploaded a file: ${request.fileName}
+        Here's a sample of their data: ${JSON.stringify(request.fileData).slice(0, 1000)}...`
+      }
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
+          {
+            role: "user",
+            content: request.message,
+          },
+        ],
+        max_tokens: 1000,
+        temperature: 0.7,
+      })
+
+      const response = completion.choices[0]?.message?.content || "I couldn't process your request."
+
+      return {
+        response,
+        success: true,
+      }
+    } catch (error) {
+      console.error("AI processing error:", error)
+      return {
+        response: "I'm sorry, I encountered an error processing your request.",
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      }
     }
   }
 }

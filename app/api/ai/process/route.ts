@@ -1,22 +1,24 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { AIService } from "@/lib/ai-service"
+import { processWithAI } from "@/lib/ai-service"
 
 export async function POST(request: NextRequest) {
   try {
-    const { query, data } = await request.json()
+    const body = await request.json()
+    const { message, fileData, fileName } = body
 
-    if (!query) {
-      return NextResponse.json({ error: "Query is required" }, { status: 400 })
+    if (!message) {
+      return NextResponse.json({ error: "Message is required" }, { status: 400 })
     }
 
-    const response = await AIService.processExcelQuery(query, data || [])
-
-    return NextResponse.json({
-      success: true,
-      response,
+    const result = await processWithAI({
+      message,
+      fileData,
+      fileName,
     })
+
+    return NextResponse.json(result)
   } catch (error) {
-    console.error("AI processing error:", error)
-    return NextResponse.json({ error: "Failed to process AI request" }, { status: 500 })
+    console.error("API error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
