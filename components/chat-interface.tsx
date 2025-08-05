@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Send, Bot, User, Zap, MessageSquare, AlertTriangle, Cloud, FolderSyncIcon as Sync, Mic } from "lucide-react"
 import VoiceInputButton from "@/components/voice-input-button"
 import { ChatService } from "@/lib/chat-service"
-import { VoiceService } from "@/lib/voice-service"
 
 interface Message {
   id: string
@@ -154,26 +153,6 @@ export default function ChatInterface({
     setInput(transcript)
   }
 
-  const handleSpeakResponse = async (text: string) => {
-    try {
-      // Initialize voice service if not already done
-      const elevenLabsKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY
-      if (elevenLabsKey) {
-        VoiceService.initialize({
-          apiKey: elevenLabsKey,
-          voiceId: "EXAVITQu4vr4xnSDxMaL",
-        })
-
-        const result = await VoiceService.textToSpeech(text)
-        if (result.audioUrl) {
-          await VoiceService.playAudio(result.audioUrl)
-        }
-      }
-    } catch (error) {
-      console.error("Failed to speak response:", error)
-    }
-  }
-
   const handleSend = async (message?: string, isVoiceInput = false) => {
     const messageText = message || input.trim()
     if (!messageText || isLoading || !userId || !fileId) return
@@ -287,13 +266,6 @@ export default function ChatInterface({
       // If we have new data, update it
       if (result.newData && onDataUpdate) {
         onDataUpdate(result.newData)
-      }
-
-      // Auto-speak response if it was a voice input
-      if (isVoiceInput && cleanedResponse) {
-        setTimeout(() => {
-          handleSpeakResponse(cleanedResponse)
-        }, 500)
       }
     } catch (error) {
       console.error("AI processing error:", error)
@@ -564,7 +536,7 @@ export default function ChatInterface({
                           ? "Please sign in to chat"
                           : !fileId
                             ? "No file selected"
-                            : "Ask me to modify your Excel data or use voice input 🎤..."
+                            : "Ask me to modify your Excel data or use voice input..."
                   }
                   disabled={!canChat || isLoading}
                   className="pr-12 h-12 border-primary-200 focus:border-primary-400 focus:ring-primary-400 bg-white shadow-sm text-base"
@@ -577,15 +549,11 @@ export default function ChatInterface({
                 )}
               </div>
 
-              {/* Enhanced Voice Input Button */}
+              {/* Simplified Voice Input Button */}
               <VoiceInputButton
-                onTranscript={(transcript) => {
-                  console.log("Voice transcript received:", transcript)
-                  handleSend(transcript, true)
-                }}
-                onSpeakResponse={handleSpeakResponse}
+                onTranscript={handleVoiceTranscript}
                 disabled={!canChat || isLoading}
-                className="h-12 px-4 border-2 border-blue-300 text-blue-600 hover:bg-blue-50 bg-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                className="h-12"
               />
 
               <Button
@@ -600,16 +568,6 @@ export default function ChatInterface({
                 )}
               </Button>
             </div>
-
-            {/* Voice Input Instructions */}
-            {canChat && (
-              <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
-                <Mic className="h-3 w-3" />
-                <span>Click the microphone to speak your Excel commands</span>
-                <span>•</span>
-                <span>Press Enter or click Send to type</span>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
