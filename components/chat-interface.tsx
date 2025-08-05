@@ -5,9 +5,20 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Send, Bot, User, Zap, MessageSquare, AlertTriangle, Cloud, FolderSyncIcon as Sync, Mic } from "lucide-react"
-import VoiceInputButton from "@/components/voice-input-button"
+import {
+  Send,
+  Bot,
+  User,
+  Zap,
+  MessageSquare,
+  AlertTriangle,
+  Cloud,
+  FolderSyncIcon as Sync,
+  Mic,
+  MicOff,
+} from "lucide-react"
 import { ChatService } from "@/lib/chat-service"
+import { VoiceService } from "@/lib/voice-service"
 
 interface Message {
   id: string
@@ -26,6 +37,88 @@ interface ChatInterfaceProps {
   onDataUpdate?: (newData: string[][]) => void
   onRefreshData?: () => void
   userId?: string
+}
+
+// Inline Voice Input Component to avoid import issues
+function VoiceInputButton({
+  onTranscript,
+  disabled = false,
+  className = "",
+}: {
+  onTranscript: (text: string) => void
+  disabled?: boolean
+  className?: string
+}) {
+  const [isRecording, setIsRecording] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [isVoiceAvailable, setIsVoiceAvailable] = useState(false)
+
+  useEffect(() => {
+    // Check if voice input is available
+    setIsVoiceAvailable(VoiceService.isAvailable())
+  }, [])
+
+  const handleToggleRecording = async () => {
+    if (isRecording) {
+      // Stop recording
+      try {
+        setIsRecording(false)
+        setIsProcessing(true)
+
+        const result = await VoiceService.stopRecording()
+        if (result.text) {
+          onTranscript(result.text)
+        }
+      } catch (error) {
+        console.error("Failed to process recording:", error)
+      } finally {
+        setIsProcessing(false)
+      }
+    } else {
+      // Start recording
+      try {
+        setIsRecording(true)
+        await VoiceService.startRecording()
+      } catch (error) {
+        console.error("Failed to start recording:", error)
+        setIsRecording(false)
+      }
+    }
+  }
+
+  if (!isVoiceAvailable) {
+    return null
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={handleToggleRecording}
+      disabled={disabled || isProcessing}
+      className={`
+        relative transition-all duration-300 border-2
+        ${
+          isRecording
+            ? "border-red-400 bg-red-50 text-red-600 hover:bg-red-100 animate-pulse"
+            : "border-primary-300 text-primary-600 hover:bg-primary-50 bg-white"
+        }
+        ${className}
+      `}
+    >
+      {isProcessing ? (
+        <div className="w-4 h-4 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
+      ) : isRecording ? (
+        <MicOff className="h-4 w-4" />
+      ) : (
+        <Mic className="h-4 w-4" />
+      )}
+
+      {/* Recording indicator */}
+      {isRecording && <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping" />}
+    </Button>
+  )
 }
 
 export default function ChatInterface({
@@ -150,6 +243,7 @@ export default function ChatInterface({
   }, [messages])
 
   const handleVoiceTranscript = (transcript: string) => {
+    console.log("Voice transcript received:", transcript)
     setInput(transcript)
   }
 
@@ -320,6 +414,12 @@ export default function ChatInterface({
 
   const canChat = mcpFilePath && hasApiKey && userId && fileId
   const filename = mcpFilePath?.split("/").pop() || ""
+
+  console.log("=== CHAT INTERFACE RENDER DEBUG ===")
+  console.log("Can chat:", canChat)
+  console.log("Voice service available:", VoiceService.isAvailable())
+  console.log("File ID:", fileId)
+  console.log("User ID:", userId)
 
   return (
     <div className="h-full flex flex-col">
@@ -549,7 +649,7 @@ export default function ChatInterface({
                 )}
               </div>
 
-              {/* Simplified Voice Input Button */}
+              {/* Voice Input Button - Now inline to avoid import issues */}
               <VoiceInputButton
                 onTranscript={handleVoiceTranscript}
                 disabled={!canChat || isLoading}
