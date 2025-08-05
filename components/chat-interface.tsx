@@ -564,7 +564,7 @@ export default function ChatInterface({
                           ? "Please sign in to chat"
                           : !fileId
                             ? "No file selected"
-                            : "Ask me to modify your Excel data with auto-sync to OneDrive..."
+                            : "Ask me to modify your Excel data or use voice input 🎤..."
                   }
                   disabled={!canChat || isLoading}
                   className="pr-12 h-12 border-primary-200 focus:border-primary-400 focus:ring-primary-400 bg-white shadow-sm text-base"
@@ -577,12 +577,15 @@ export default function ChatInterface({
                 )}
               </div>
 
-              {/* Voice Input Button */}
+              {/* Enhanced Voice Input Button */}
               <VoiceInputButton
-                onTranscript={(transcript) => handleSend(transcript, true)}
+                onTranscript={(transcript) => {
+                  console.log("Voice transcript received:", transcript)
+                  handleSend(transcript, true)
+                }}
                 onSpeakResponse={handleSpeakResponse}
                 disabled={!canChat || isLoading}
-                className="h-12"
+                className="h-12 px-4 border-2 border-blue-300 text-blue-600 hover:bg-blue-50 bg-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
               />
 
               <Button
@@ -597,6 +600,16 @@ export default function ChatInterface({
                 )}
               </Button>
             </div>
+
+            {/* Voice Input Instructions */}
+            {canChat && (
+              <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
+                <Mic className="h-3 w-3" />
+                <span>Click the microphone to speak your Excel commands</span>
+                <span>•</span>
+                <span>Press Enter or click Send to type</span>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

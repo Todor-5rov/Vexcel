@@ -10,7 +10,7 @@ import FileUpload from "@/components/file-upload"
 import FileHistory from "@/components/file-history"
 import ExcelEmbedViewer from "@/components/excel-embed-viewer"
 import ChatInterface from "@/components/chat-interface"
-import { FileSpreadsheet, LogOut, Home } from "lucide-react"
+import { FileSpreadsheet, LogOut, Home, Mic } from "lucide-react"
 
 interface DashboardProps {
   user: User
@@ -221,20 +221,28 @@ export default function Dashboard({ user, onAuthChange }: DashboardProps) {
             </div>
             <div className="flex items-center gap-4">
               {selectedFilename && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedFileId("")
-                    setSelectedFilename("")
-                    setSelectedMcpFilePath("")
-                    setSelectedEmbedUrl("")
-                    setSelectedOneDriveWebUrl("")
-                  }}
-                  className="border-primary-300 text-primary-600 hover:bg-primary-50 bg-transparent"
-                >
-                  <Home className="h-4 w-4 mr-2" />
-                  Dashboard
-                </Button>
+                <div className="flex items-center gap-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedFileId("")
+                      setSelectedFilename("")
+                      setSelectedMcpFilePath("")
+                      setSelectedEmbedUrl("")
+                      setSelectedOneDriveWebUrl("")
+                    }}
+                    className="border-primary-300 text-primary-600 hover:bg-primary-50 bg-transparent"
+                  >
+                    <Home className="h-4 w-4 mr-2" />
+                    Dashboard
+                  </Button>
+
+                  {/* Voice Input Status Indicator */}
+                  <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 rounded-full border border-blue-200">
+                    <Mic className="h-3 w-3 text-blue-600" />
+                    <span className="text-xs text-blue-700 font-medium">Voice Input Available</span>
+                  </div>
+                </div>
               )}
               <div className="flex items-center gap-3">
                 <div className="text-sm text-right">
