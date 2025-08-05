@@ -276,7 +276,7 @@ export default function Dashboard({ user, onAuthChange }: DashboardProps) {
                   </h1>
                   <p className="text-primary-100 text-lg">
                     Ready to transform your Excel files with AI? Upload a new file or continue working with your
-                    existing data. Now with read-only OneDrive viewing and voice input! 🎤
+                    existing data. Now with Excel preview and voice input! 🎤
                   </p>
                 </div>
               </div>
