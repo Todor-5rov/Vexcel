@@ -27,19 +27,35 @@ export class VoiceService {
     console.log("Voice service initialized with ElevenLabs")
   }
 
-  // Check if voice service is available
+  // Check if voice service is available - SIMPLIFIED FOR DEBUGGING
   static isAvailable(): boolean {
-    return !!((this.config?.apiKey && "webkitSpeechRecognition" in window) || "SpeechRecognition" in window)
+    console.log("🎤 VoiceService.isAvailable() called")
+
+    // Check for basic browser support
+    const hasMediaDevices = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+    const hasSpeechRecognition = !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
+
+    console.log("🎤 Media devices support:", hasMediaDevices)
+    console.log("🎤 Speech recognition support:", hasSpeechRecognition)
+
+    // For now, let's just check for basic media support
+    const isAvailable = hasMediaDevices
+    console.log("🎤 Voice service available:", isAvailable)
+
+    return isAvailable
   }
 
   // Start voice recording for speech-to-text
   static async startRecording(): Promise<void> {
+    console.log("🎤 Starting voice recording...")
+
     if (this.isRecording) {
       throw new Error("Already recording")
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      console.log("🎤 Got media stream:", stream)
 
       this.mediaRecorder = new MediaRecorder(stream)
       this.audioChunks = []
@@ -52,15 +68,17 @@ export class VoiceService {
       }
 
       this.mediaRecorder.start()
-      console.log("Voice recording started")
+      console.log("🎤 Voice recording started successfully")
     } catch (error) {
-      console.error("Error starting voice recording:", error)
+      console.error("🎤 Error starting voice recording:", error)
       throw new Error("Failed to start voice recording. Please check microphone permissions.")
     }
   }
 
   // Stop recording and convert to text
   static async stopRecording(): Promise<SpeechToTextResult> {
+    console.log("🎤 Stopping voice recording...")
+
     if (!this.isRecording || !this.mediaRecorder) {
       throw new Error("Not currently recording")
     }
@@ -85,7 +103,7 @@ export class VoiceService {
           const result = await this.speechToTextWithWebAPI()
           resolve(result)
         } catch (error) {
-          console.error("Error processing voice recording:", error)
+          console.error("🎤 Error processing voice recording:", error)
           reject(error)
         }
       }
@@ -96,9 +114,11 @@ export class VoiceService {
 
   // Use Web Speech API for speech recognition (free)
   private static speechToTextWithWebAPI(): Promise<SpeechToTextResult> {
+    console.log("🎤 Using Web Speech API for recognition...")
+
     return new Promise((resolve, reject) => {
       // @ts-ignore - Web Speech API types
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
 
       if (!SpeechRecognition) {
         reject(new Error("Speech recognition not supported in this browser"))
@@ -110,24 +130,24 @@ export class VoiceService {
       recognition.interimResults = false
       recognition.lang = "en-US"
 
-      recognition.onresult = (event) => {
+      recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript
         const confidence = event.results[0][0].confidence
 
-        console.log("Speech recognition result:", transcript)
+        console.log("🎤 Speech recognition result:", transcript)
         resolve({
           text: transcript,
           confidence: confidence,
         })
       }
 
-      recognition.onerror = (event) => {
-        console.error("Speech recognition error:", event.error)
+      recognition.onerror = (event: any) => {
+        console.error("🎤 Speech recognition error:", event.error)
         reject(new Error(`Speech recognition failed: ${event.error}`))
       }
 
       recognition.onend = () => {
-        console.log("Speech recognition ended")
+        console.log("🎤 Speech recognition ended")
       }
 
       // Start recognition

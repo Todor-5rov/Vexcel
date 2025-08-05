@@ -39,7 +39,7 @@ interface ChatInterfaceProps {
   userId?: string
 }
 
-// Inline Voice Input Component to avoid import issues
+// Inline Voice Input Component with EXTENSIVE debugging
 function VoiceInputButton({
   onTranscript,
   disabled = false,
@@ -54,42 +54,61 @@ function VoiceInputButton({
   const [isVoiceAvailable, setIsVoiceAvailable] = useState(false)
 
   useEffect(() => {
+    console.log("🎤 VoiceInputButton useEffect - checking availability...")
+
     // Check if voice input is available
-    setIsVoiceAvailable(VoiceService.isAvailable())
+    const available = VoiceService.isAvailable()
+    console.log("🎤 VoiceInputButton - Voice available:", available)
+    setIsVoiceAvailable(available)
+
+    // Also log browser capabilities
+    console.log("🎤 Navigator.mediaDevices:", !!navigator.mediaDevices)
+    console.log("🎤 getUserMedia:", !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia))
+    console.log(
+      "🎤 SpeechRecognition:",
+      !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition),
+    )
   }, [])
 
   const handleToggleRecording = async () => {
+    console.log("🎤 Voice button clicked! Recording:", isRecording)
+
     if (isRecording) {
       // Stop recording
       try {
+        console.log("🎤 Stopping recording...")
         setIsRecording(false)
         setIsProcessing(true)
 
         const result = await VoiceService.stopRecording()
+        console.log("🎤 Recording result:", result)
+
         if (result.text) {
+          console.log("🎤 Calling onTranscript with:", result.text)
           onTranscript(result.text)
         }
       } catch (error) {
-        console.error("Failed to process recording:", error)
+        console.error("🎤 Failed to process recording:", error)
       } finally {
         setIsProcessing(false)
       }
     } else {
       // Start recording
       try {
+        console.log("🎤 Starting recording...")
         setIsRecording(true)
         await VoiceService.startRecording()
+        console.log("🎤 Recording started successfully")
       } catch (error) {
-        console.error("Failed to start recording:", error)
+        console.error("🎤 Failed to start recording:", error)
         setIsRecording(false)
       }
     }
   }
 
-  if (!isVoiceAvailable) {
-    return null
-  }
+  console.log("🎤 VoiceInputButton render - Available:", isVoiceAvailable, "Disabled:", disabled)
 
+  // ALWAYS render the button for debugging, but show different states
   return (
     <Button
       type="button"
@@ -100,15 +119,26 @@ function VoiceInputButton({
       className={`
         relative transition-all duration-300 border-2
         ${
-          isRecording
-            ? "border-red-400 bg-red-50 text-red-600 hover:bg-red-100 animate-pulse"
-            : "border-primary-300 text-primary-600 hover:bg-primary-50 bg-white"
+          !isVoiceAvailable
+            ? "border-gray-300 bg-gray-100 text-gray-400"
+            : isRecording
+              ? "border-red-400 bg-red-50 text-red-600 hover:bg-red-100 animate-pulse"
+              : "border-primary-300 text-primary-600 hover:bg-primary-50 bg-white"
         }
         ${className}
       `}
+      title={
+        !isVoiceAvailable
+          ? "Voice input not available in this browser"
+          : isRecording
+            ? "Click to stop recording"
+            : "Click to start voice input"
+      }
     >
       {isProcessing ? (
         <div className="w-4 h-4 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
+      ) : !isVoiceAvailable ? (
+        <Mic className="h-4 w-4 opacity-50" />
       ) : isRecording ? (
         <MicOff className="h-4 w-4" />
       ) : (
@@ -117,6 +147,11 @@ function VoiceInputButton({
 
       {/* Recording indicator */}
       {isRecording && <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping" />}
+
+      {/* Debug indicator */}
+      {!isVoiceAvailable && (
+        <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500 rounded-full" title="Voice not available" />
+      )}
     </Button>
   )
 }
@@ -135,6 +170,9 @@ export default function ChatInterface({
   const [isLoading, setIsLoading] = useState(false)
   const [hasApiKey, setHasApiKey] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Add debug logging for component render
+  console.log("🎤 ChatInterface render - fileId:", fileId, "userId:", userId)
 
   // Function to clean markdown from AI responses
   const cleanMarkdown = (text: string): string => {
@@ -243,7 +281,7 @@ export default function ChatInterface({
   }, [messages])
 
   const handleVoiceTranscript = (transcript: string) => {
-    console.log("Voice transcript received:", transcript)
+    console.log("🎤 Voice transcript received in ChatInterface:", transcript)
     setInput(transcript)
   }
 
@@ -415,11 +453,11 @@ export default function ChatInterface({
   const canChat = mcpFilePath && hasApiKey && userId && fileId
   const filename = mcpFilePath?.split("/").pop() || ""
 
-  console.log("=== CHAT INTERFACE RENDER DEBUG ===")
-  console.log("Can chat:", canChat)
-  console.log("Voice service available:", VoiceService.isAvailable())
-  console.log("File ID:", fileId)
-  console.log("User ID:", userId)
+  console.log("🎤 === CHAT INTERFACE RENDER DEBUG ===")
+  console.log("🎤 Can chat:", canChat)
+  console.log("🎤 Voice service available:", VoiceService.isAvailable())
+  console.log("🎤 File ID:", fileId)
+  console.log("🎤 User ID:", userId)
 
   return (
     <div className="h-full flex flex-col">
@@ -649,12 +687,14 @@ export default function ChatInterface({
                 )}
               </div>
 
-              {/* Voice Input Button - Now inline to avoid import issues */}
-              <VoiceInputButton
-                onTranscript={handleVoiceTranscript}
-                disabled={!canChat || isLoading}
-                className="h-12"
-              />
+              {/* Voice Input Button - ALWAYS VISIBLE FOR DEBUGGING */}
+              <div className="flex items-center">
+                <VoiceInputButton
+                  onTranscript={handleVoiceTranscript}
+                  disabled={!canChat || isLoading}
+                  className="h-12"
+                />
+              </div>
 
               <Button
                 onClick={() => handleSend()}
