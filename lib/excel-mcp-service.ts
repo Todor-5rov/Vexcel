@@ -70,7 +70,7 @@ export class ExcelMCPService {
 
       const formData = new FormData()
       formData.append("file", file)
-
+      formData.append('allow_edit', 'true')
       const response = await fetch(`${this.BASE_URL}/upload/${userId}`, {
         method: "POST",
         body: formData,
