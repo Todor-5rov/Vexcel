@@ -5,9 +5,9 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Send, Bot, User, Zap, MessageSquare, AlertTriangle, Cloud, FolderSyncIcon as Sync, History, Trash2, Mic } from 'lucide-react'
+import { Send, Bot, User, Zap, MessageSquare, AlertTriangle, Cloud, FolderSyncIcon as Sync, Mic } from "lucide-react"
 import VoiceInputButton from "@/components/voice-input-button"
-import { ChatService, type ChatSession } from "@/lib/chat-service"
+import { ChatService } from "@/lib/chat-service"
 import { VoiceService } from "@/lib/voice-service"
 
 interface Message {
@@ -42,10 +42,6 @@ export default function ChatInterface({
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [hasApiKey, setHasApiKey] = useState(false)
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
-  const [showHistory, setShowHistory] = useState(false)
-  const [loadingHistory, setLoadingHistory] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Function to clean markdown from AI responses
@@ -62,16 +58,13 @@ export default function ChatInterface({
     return cleaned
   }
 
-  // Initialize chat session when file changes
+  // Initialize chat when file changes
   useEffect(() => {
     const initializeChat = async () => {
       if (fileId && userId) {
         try {
-          const sessionId = await ChatService.getOrCreateSession(userId, fileId)
-          setCurrentSessionId(sessionId)
-
-          // Load existing messages
-          const existingMessages = await ChatService.loadMessages(sessionId)
+          // Load existing messages for this file
+          const existingMessages = await ChatService.loadMessagesForFile(userId, fileId)
 
           if (existingMessages.length > 0) {
             // Convert to local message format
@@ -85,7 +78,7 @@ export default function ChatInterface({
             }))
             setMessages(convertedMessages)
           } else {
-            // Set welcome message for new chat
+            // Set welcome message for new file
             const welcomeMessage: Message = {
               id: "welcome",
               role: "assistant",
@@ -129,67 +122,6 @@ export default function ChatInterface({
       return `Hello! I can see your spreadsheet "${filename}" with ${currentData.length - 1} rows and columns: ${headers.join(", ")}. I can help you manipulate this data using natural language. Try asking me to "sort by ${headers[0]}", "calculate averages", or "add a new column". All changes will be automatically synced to OneDrive for real-time collaboration! 🎤 You can also use voice input to speak your commands.`
     }
     return "Hello! Upload an Excel file and I'll help you manipulate your data using natural language commands with advanced Excel operations and real-time OneDrive sync. 🎤 You can use voice input to speak your commands!"
-  }
-
-  // Load chat history
-  const loadChatHistory = async () => {
-    if (!userId) return
-
-    try {
-      setLoadingHistory(true)
-      const sessions = await ChatService.getUserSessions(userId)
-      setChatSessions(sessions)
-    } catch (error) {
-      console.error("Failed to load chat history:", error)
-    } finally {
-      setLoadingHistory(false)
-    }
-  }
-
-  // Switch to a different chat session
-  const switchToSession = async (sessionId: string) => {
-    try {
-      const messages = await ChatService.loadMessages(sessionId)
-      const convertedMessages: Message[] = messages.map((msg) => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content,
-        timestamp: msg.timestamp,
-        type: msg.messageType as "suggestion" | "normal" | "error",
-        voiceInput: msg.voiceInput,
-      }))
-
-      setMessages(convertedMessages)
-      setCurrentSessionId(sessionId)
-      setShowHistory(false)
-    } catch (error) {
-      console.error("Failed to switch to session:", error)
-    }
-  }
-
-  // Delete a chat session
-  const deleteSession = async (sessionId: string) => {
-    if (!userId) return
-
-    try {
-      await ChatService.deleteSession(sessionId, userId)
-      setChatSessions((prev) => prev.filter((s) => s.id !== sessionId))
-
-      // If we deleted the current session, reset to welcome
-      if (sessionId === currentSessionId) {
-        setCurrentSessionId(null)
-        setMessages([
-          {
-            id: "welcome",
-            role: "assistant",
-            content: getWelcomeMessage(),
-            timestamp: new Date(),
-          },
-        ])
-      }
-    } catch (error) {
-      console.error("Failed to delete session:", error)
-    }
   }
 
   // Check if OpenAI API key is configured
@@ -244,7 +176,7 @@ export default function ChatInterface({
 
   const handleSend = async (message?: string, isVoiceInput = false) => {
     const messageText = message || input.trim()
-    if (!messageText || isLoading || !userId) return
+    if (!messageText || isLoading || !userId || !fileId) return
 
     console.log("=== HANDLE SEND DEBUG ===")
     console.log("Sending message:", messageText)
@@ -252,7 +184,6 @@ export default function ChatInterface({
     console.log("MCP File Path:", mcpFilePath)
     console.log("File ID:", fileId)
     console.log("User ID:", userId)
-    console.log("Session ID:", currentSessionId)
     console.log("Has API key (state):", hasApiKey)
 
     const userMessage: Message = {
@@ -268,9 +199,9 @@ export default function ChatInterface({
     setIsLoading(true)
 
     // Save user message to database
-    if (currentSessionId && userId) {
+    if (userId && fileId) {
       try {
-        await ChatService.saveMessage(currentSessionId, userId, "user", messageText, {
+        await ChatService.saveMessageForFile(userId, fileId, "user", messageText, {
           messageType: "normal",
           voiceInput: isVoiceInput,
         })
@@ -292,8 +223,8 @@ export default function ChatInterface({
         setMessages((prev) => [...prev, errorMessage])
 
         // Save error message
-        if (currentSessionId && userId) {
-          await ChatService.saveMessage(currentSessionId, userId, "assistant", errorMessage.content, {
+        if (userId && fileId) {
+          await ChatService.saveMessageForFile(userId, fileId, "assistant", errorMessage.content, {
             messageType: "error",
           })
         }
@@ -336,9 +267,9 @@ export default function ChatInterface({
       setMessages((prev) => [...prev, assistantMessage])
 
       // Save assistant message to database
-      if (currentSessionId && userId) {
+      if (userId && fileId) {
         try {
-          await ChatService.saveMessage(currentSessionId, userId, "assistant", cleanedResponse, {
+          await ChatService.saveMessageForFile(userId, fileId, "assistant", cleanedResponse, {
             messageType: "normal",
           })
         } catch (error) {
@@ -376,9 +307,9 @@ export default function ChatInterface({
       setMessages((prev) => [...prev, errorMessage])
 
       // Save error message
-      if (currentSessionId && userId) {
+      if (userId && fileId) {
         try {
-          await ChatService.saveMessage(currentSessionId, userId, "assistant", errorMessage.content, {
+          await ChatService.saveMessageForFile(userId, fileId, "assistant", errorMessage.content, {
             messageType: "error",
           })
         } catch (error) {
@@ -415,7 +346,7 @@ export default function ChatInterface({
         ]
       : ["Upload an Excel file first", "Try advanced Excel operations", "Learn about VExcel features"]
 
-  const canChat = mcpFilePath && hasApiKey && userId
+  const canChat = mcpFilePath && hasApiKey && userId && fileId
   const filename = mcpFilePath?.split("/").pop() || ""
 
   return (
@@ -447,71 +378,10 @@ export default function ChatInterface({
                 </div>
               </div>
             </div>
-
-            {/* Chat History Button */}
-            {userId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setShowHistory(!showHistory)
-                  if (!showHistory) loadChatHistory()
-                }}
-                className="border-primary-300 text-primary-600 hover:bg-primary-50 bg-transparent"
-              >
-                <History className="h-4 w-4 mr-2" />
-                History
-              </Button>
-            )}
           </CardTitle>
         </CardHeader>
 
         <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
-          {/* Chat History Sidebar */}
-          {showHistory && (
-            <div className="flex-shrink-0 border-b border-primary-200 bg-primary-50/50 p-4 max-h-48 overflow-y-auto">
-              <div className="space-y-2">
-                <h3 className="font-semibold text-primary-700 text-sm">Chat History</h3>
-                {loadingHistory ? (
-                  <div className="text-sm text-gray-500">Loading...</div>
-                ) : chatSessions.length === 0 ? (
-                  <div className="text-sm text-gray-500">No previous chats</div>
-                ) : (
-                  <div className="space-y-1">
-                    {chatSessions.map((session) => (
-                      <div
-                        key={session.id}
-                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                          session.id === currentSessionId
-                            ? "bg-primary-100 border border-primary-300"
-                            : "bg-white hover:bg-primary-50 border border-transparent"
-                        }`}
-                      >
-                        <div className="flex-1 min-w-0" onClick={() => switchToSession(session.id)}>
-                          <div className="text-sm font-medium text-gray-900 truncate">{session.title}</div>
-                          <div className="text-xs text-gray-500">
-                            {session.messageCount} messages • {formatTime(session.lastMessageAt)}
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteSession(session.id)
-                          }}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-2"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Messages - This is the scrollable area */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {messages.map((message, index) => (
@@ -638,7 +508,7 @@ export default function ChatInterface({
           </div>
 
           {/* Service Status Warning */}
-          {(!hasApiKey || !mcpFilePath || !userId) && (
+          {(!hasApiKey || !mcpFilePath || !userId || !fileId) && (
             <div className="flex-shrink-0 border-t border-yellow-200 p-4 bg-yellow-50/50">
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle className="h-4 w-4 text-yellow-600" />
@@ -648,6 +518,7 @@ export default function ChatInterface({
                 {!hasApiKey && <p>• OpenAI API key not configured</p>}
                 {!mcpFilePath && <p>• No file selected for processing</p>}
                 {!userId && <p>• User not authenticated</p>}
+                {!fileId && <p>• No file ID available</p>}
               </div>
             </div>
           )}
@@ -691,7 +562,9 @@ export default function ChatInterface({
                         ? "OpenAI API key required..."
                         : !userId
                           ? "Please sign in to chat"
-                          : "Ask me to modify your Excel data with auto-sync to OneDrive..."
+                          : !fileId
+                            ? "No file selected"
+                            : "Ask me to modify your Excel data with auto-sync to OneDrive..."
                   }
                   disabled={!canChat || isLoading}
                   className="pr-12 h-12 border-primary-200 focus:border-primary-400 focus:ring-primary-400 bg-white shadow-sm text-base"

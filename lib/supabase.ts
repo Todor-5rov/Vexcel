@@ -95,7 +95,7 @@ export type Database = {
         Row: {
           id: string
           user_id: string
-          session_id: string
+          file_id: string
           role: "user" | "assistant"
           content: string
           message_type: "normal" | "suggestion" | "error"
@@ -106,7 +106,7 @@ export type Database = {
         Insert: {
           id?: string
           user_id: string
-          session_id: string
+          file_id: string
           role: "user" | "assistant"
           content: string
           message_type?: "normal" | "suggestion" | "error"
@@ -117,7 +117,7 @@ export type Database = {
         Update: {
           id?: string
           user_id?: string
-          session_id?: string
+          file_id?: string
           role?: "user" | "assistant"
           content?: string
           message_type?: "normal" | "suggestion" | "error"

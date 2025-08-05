@@ -9,73 +9,17 @@ export interface ChatMessage {
   timestamp: Date
 }
 
-export interface ChatSession {
-  id: string
-  fileId: string
-  title?: string
-  messageCount: number
-  lastMessageAt: Date
-  createdAt: Date
-  fileName?: string
-}
-
 export class ChatService {
-  // Get or create chat session for a file
-  static async getOrCreateSession(userId: string, fileId: string): Promise<string> {
+  // Load all chat messages for a specific file
+  static async loadMessagesForFile(userId: string, fileId: string): Promise<ChatMessage[]> {
     try {
-      console.log("Getting/creating chat session for:", { userId, fileId })
-
-      // First, try to find existing session
-      const { data: existingSession, error: findError } = await supabase
-        .from("chat_sessions")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("file_id", fileId)
-        .order("last_message_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (existingSession && !findError) {
-        console.log("Found existing chat session:", existingSession.id)
-        return existingSession.id
-      }
-
-      // Create new session
-      const { data: newSession, error: createError } = await supabase
-        .from("chat_sessions")
-        .insert({
-          user_id: userId,
-          file_id: fileId,
-          message_count: 0,
-          last_message_at: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single()
-
-      if (createError) {
-        console.error("Error creating chat session:", createError)
-        throw createError
-      }
-
-      console.log("Created new chat session:", newSession.id)
-      return newSession.id
-    } catch (error) {
-      console.error("Error getting/creating chat session:", error)
-      throw error
-    }
-  }
-
-  // Load chat messages for a session
-  static async loadMessages(sessionId: string): Promise<ChatMessage[]> {
-    try {
-      console.log("Loading messages for session:", sessionId)
+      console.log("Loading messages for file:", { userId, fileId })
 
       const { data, error } = await supabase
         .from("chat_messages")
         .select("*")
-        .eq("session_id", sessionId)
+        .eq("user_id", userId)
+        .eq("file_id", fileId)
         .order("created_at", { ascending: true })
 
       if (error) {
@@ -92,7 +36,7 @@ export class ChatService {
         timestamp: new Date(msg.created_at),
       }))
 
-      console.log(`Loaded ${messages.length} messages for session ${sessionId}`)
+      console.log(`Loaded ${messages.length} messages for file ${fileId}`)
       return messages
     } catch (error) {
       console.error("Error loading chat messages:", error)
@@ -100,10 +44,10 @@ export class ChatService {
     }
   }
 
-  // Save a new message
-  static async saveMessage(
-    sessionId: string,
+  // Save a new message directly to a file
+  static async saveMessageForFile(
     userId: string,
+    fileId: string,
     role: "user" | "assistant",
     content: string,
     options: {
@@ -112,13 +56,13 @@ export class ChatService {
     } = {},
   ): Promise<string> {
     try {
-      console.log("Saving message:", { sessionId, userId, role, contentLength: content.length, options })
+      console.log("Saving message for file:", { userId, fileId, role, contentLength: content.length, options })
 
       const { data, error } = await supabase
         .from("chat_messages")
         .insert({
           user_id: userId,
-          session_id: sessionId,
+          file_id: fileId,
           role,
           content,
           message_type: options.messageType || "normal",
@@ -134,9 +78,6 @@ export class ChatService {
         throw error
       }
 
-      // Update session stats
-      await this.updateSessionStats(sessionId, userId, content, role)
-
       console.log("Saved chat message:", data.id)
       return data.id
     } catch (error) {
@@ -145,173 +86,43 @@ export class ChatService {
     }
   }
 
-  // Update session statistics
-  private static async updateSessionStats(
-    sessionId: string,
-    userId: string,
-    content: string,
-    role: "user" | "assistant"
-  ): Promise<void> {
+  // Delete all messages for a specific file
+  static async deleteMessagesForFile(userId: string, fileId: string): Promise<void> {
     try {
-      // Get current message count
-      const { count } = await supabase
+      console.log("Deleting messages for file:", { userId, fileId })
+
+      const { error } = await supabase.from("chat_messages").delete().eq("user_id", userId).eq("file_id", fileId)
+
+      if (error) {
+        console.error("Error deleting messages:", error)
+        throw error
+      }
+
+      console.log("Successfully deleted messages for file:", fileId)
+    } catch (error) {
+      console.error("Error deleting chat messages:", error)
+      throw error
+    }
+  }
+
+  // Get message count for a file
+  static async getMessageCountForFile(userId: string, fileId: string): Promise<number> {
+    try {
+      const { count, error } = await supabase
         .from("chat_messages")
         .select("*", { count: "exact", head: true })
-        .eq("session_id", sessionId)
-
-      // Update session with new stats
-      const updateData: any = {
-        message_count: count || 0,
-        last_message_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-
-      // Set title from first user message if not already set
-      if (role === "user") {
-        const { data: session } = await supabase
-          .from("chat_sessions")
-          .select("title")
-          .eq("id", sessionId)
-          .single()
-
-        if (!session?.title) {
-          updateData.title = content.length > 50 ? content.substring(0, 50) + "..." : content
-        }
-      }
-
-      await supabase
-        .from("chat_sessions")
-        .update(updateData)
-        .eq("id", sessionId)
-        .eq("user_id", userId)
-
-    } catch (error) {
-      console.error("Error updating session stats:", error)
-    }
-  }
-
-  // Get chat sessions for a user with file information
-  static async getUserSessions(userId: string): Promise<ChatSession[]> {
-    try {
-      console.log("Getting user sessions for:", userId)
-
-      const { data, error } = await supabase
-        .from("chat_sessions")
-        .select(`
-          id,
-          file_id,
-          title,
-          message_count,
-          last_message_at,
-          created_at,
-          user_files!inner(file_name)
-        `)
-        .eq("user_id", userId)
-        .order("last_message_at", { ascending: false })
-
-      if (error) {
-        console.error("Error getting user sessions:", error)
-        throw error
-      }
-
-      const sessions = (data || []).map((session: any) => ({
-        id: session.id,
-        fileId: session.file_id,
-        title: session.title || `Chat with ${session.user_files?.file_name || "Unknown File"}`,
-        messageCount: session.message_count || 0,
-        lastMessageAt: new Date(session.last_message_at),
-        createdAt: new Date(session.created_at),
-        fileName: session.user_files?.file_name,
-      }))
-
-      console.log(`Found ${sessions.length} sessions for user ${userId}`)
-      return sessions
-    } catch (error) {
-      console.error("Error getting user sessions:", error)
-      return []
-    }
-  }
-
-  // Delete a chat session and all its messages
-  static async deleteSession(sessionId: string, userId: string): Promise<void> {
-    try {
-      console.log("Deleting session:", { sessionId, userId })
-
-      // First delete all messages in the session
-      const { error: messagesError } = await supabase
-        .from("chat_messages")
-        .delete()
-        .eq("session_id", sessionId)
-        .eq("user_id", userId)
-
-      if (messagesError) {
-        console.error("Error deleting messages:", messagesError)
-        throw messagesError
-      }
-
-      // Then delete the session
-      const { error: sessionError } = await supabase
-        .from("chat_sessions")
-        .delete()
-        .eq("id", sessionId)
-        .eq("user_id", userId)
-
-      if (sessionError) {
-        console.error("Error deleting session:", sessionError)
-        throw sessionError
-      }
-
-      console.log("Successfully deleted chat session:", sessionId)
-    } catch (error) {
-      console.error("Error deleting chat session:", error)
-      throw error
-    }
-  }
-
-  // Get session by file ID (for switching files)
-  static async getSessionByFileId(userId: string, fileId: string): Promise<string | null> {
-    try {
-      const { data, error } = await supabase
-        .from("chat_sessions")
-        .select("id")
         .eq("user_id", userId)
         .eq("file_id", fileId)
-        .order("last_message_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
 
       if (error) {
-        console.error("Error getting session by file ID:", error)
-        return null
+        console.error("Error getting message count:", error)
+        return 0
       }
 
-      return data?.id || null
+      return count || 0
     } catch (error) {
-      console.error("Error getting session by file ID:", error)
-      return null
-    }
-  }
-
-  // Update session title manually
-  static async updateSessionTitle(sessionId: string, userId: string, title: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from("chat_sessions")
-        .update({ 
-          title, 
-          updated_at: new Date().toISOString() 
-        })
-        .eq("id", sessionId)
-        .eq("user_id", userId)
-
-      if (error) {
-        throw error
-      }
-
-      console.log("Updated session title:", { sessionId, title })
-    } catch (error) {
-      console.error("Error updating session title:", error)
-      throw error
+      console.error("Error getting message count:", error)
+      return 0
     }
   }
 }
