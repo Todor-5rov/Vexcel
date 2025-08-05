@@ -64,36 +64,37 @@ export type Database = {
           id: string
           user_id: string
           file_id: string
-          title?: string
-          message_count: number
-          last_message_at: string
           created_at: string
           updated_at: string
+          title?: string
+          last_message_at: string
+          message_count: number
         }
         Insert: {
           id?: string
           user_id: string
           file_id: string
-          title?: string
-          message_count?: number
-          last_message_at?: string
           created_at?: string
           updated_at?: string
+          title?: string
+          last_message_at?: string
+          message_count?: number
         }
         Update: {
           id?: string
           user_id?: string
           file_id?: string
-          title?: string
-          message_count?: number
-          last_message_at?: string
           created_at?: string
           updated_at?: string
+          title?: string
+          last_message_at?: string
+          message_count?: number
         }
       }
       chat_messages: {
         Row: {
           id: string
+          user_id: string
           session_id: string
           role: "user" | "assistant"
           content: string
@@ -104,6 +105,7 @@ export type Database = {
         }
         Insert: {
           id?: string
+          user_id: string
           session_id: string
           role: "user" | "assistant"
           content: string
@@ -114,6 +116,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          user_id?: string
           session_id?: string
           role?: "user" | "assistant"
           content?: string
