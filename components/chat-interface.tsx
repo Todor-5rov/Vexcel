@@ -292,9 +292,9 @@ export default function ChatInterface({
   const getWelcomeMessage = () => {
     if (currentData.length > 0 && headers.length > 0) {
       const filename = mcpFilePath?.split("/").pop() || "your file"
-      return `Hello! I can see your spreadsheet "${filename}" with ${currentData.length - 1} rows and columns: ${headers.join(", ")}. I can help you manipulate this data using natural language. Try asking me to "sort by ${headers[0]}", "calculate averages", or "add a new column". All changes will be automatically synced to OneDrive for real-time collaboration! 🎤 You can also use voice input to speak your commands - just click the microphone button and speak clearly.`
+      return `Hello! I can see your spreadsheet "${filename}" with ${currentData.length - 1} rows and columns: ${headers.join(", ")}. I can help you manipulate this data using natural language. Try asking me to "sort by ${headers[0]}", "calculate averages", or "add a new column". All changes will be processed by AI and you can view the results in the read-only Excel viewer! 🎤 You can also use voice input to speak your commands - just click the microphone button and speak clearly.`
     }
-    return "Hello! Upload an Excel file and I'll help you manipulate your data using natural language commands with advanced Excel operations and real-time OneDrive sync. 🎤 You can use voice input to speak your commands!"
+    return "Hello! Upload an Excel file and I'll help you manipulate your data using natural language commands with advanced Excel operations and read-only viewing. 🎤 You can use voice input to speak your commands!"
   }
 
   // Check if OpenAI API key is configured
@@ -517,7 +517,7 @@ export default function ChatInterface({
                   {canChat ? (
                     <span className="flex items-center gap-1">
                       <Sync className="h-3 w-3" />
-                      Ready with {filename} (Auto-sync enabled)
+                      Ready with {filename} (Read-only viewer enabled)
                     </span>
                   ) : (
                     "Waiting for file or API key..."
@@ -645,7 +645,7 @@ export default function ChatInterface({
                     </div>
                     <span className="text-sm text-gray-600 font-medium flex items-center gap-1">
                       <Sync className="h-3 w-3 animate-spin" />
-                      AI processing with auto-sync to OneDrive...
+                      AI processing with read-only Excel viewer...
                     </span>
                   </div>
                 </div>

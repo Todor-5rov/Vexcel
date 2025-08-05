@@ -153,7 +153,8 @@ export default function LandingPage({ onAuthChange }: LandingPageProps) {
                 </h1>
                 <p className="text-xl text-gray-600 leading-relaxed max-w-lg">
                   Stop wrestling with complex formulas and functions. Just tell VExcel what you want in plain English,
-                  and watch your spreadsheets transform instantly with the power of AI.
+                  and watch your spreadsheets transform instantly with the power of AI. View your results in real-time
+                  with our read-only Excel viewer.
                 </p>
               </div>
 
@@ -344,9 +345,9 @@ export default function LandingPage({ onAuthChange }: LandingPageProps) {
                 icon: FileSpreadsheet,
                 title: "Universal Compatibility",
                 description:
-                  "Works seamlessly with Excel, CSV, Google Sheets, and more. Import and export without losing formatting or formulas.",
+                  "Works seamlessly with Excel, CSV, Google Sheets, and more. Import and export without losing formatting or formulas. View results in read-only Excel embed.",
                 color: "from-indigo-500 to-purple-500",
-                features: ["Format preservation", "Formula compatibility", "Seamless import/export"],
+                features: ["Format preservation", "Formula compatibility", "Read-only Excel viewer"],
               },
             ].map((feature, index) => (
               <Card

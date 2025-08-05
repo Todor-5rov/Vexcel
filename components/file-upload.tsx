@@ -246,7 +246,9 @@ export default function FileUpload({ user, onFileUploaded }: FileUploadProps) {
                 </div>
                 <div>
                   <p className="text-xl font-bold text-green-700">Upload Successful!</p>
-                  <p className="text-sm text-green-600 mt-2">Your file is ready for AI processing and embedding</p>
+                  <p className="text-sm text-green-600 mt-2">
+                    Your file is ready for AI processing and read-only viewing
+                  </p>
                 </div>
               </div>
             ) : uploadStatus === "error" ? (
@@ -325,10 +327,10 @@ export default function FileUpload({ user, onFileUploaded }: FileUploadProps) {
                 <h4 className="font-semibold text-primary-900 mb-1">What happens next?</h4>
                 <ul className="text-sm text-primary-700 space-y-1">
                   <li>• Your file will be uploaded to our Excel processing server</li>
-                  <li>• File will also be uploaded to OneDrive for interactive embedding</li>
-                  <li>• You'll be able to chat with your data and make complex changes</li>
-                  <li>• View and edit your Excel file directly in the browser</li>
-                  <li>• All changes are processed in real-time with full Excel compatibility</li>
+                  <li>• File will also be uploaded to OneDrive for read-only viewing</li>
+                  <li>• You'll be able to chat with your data and make complex changes via AI</li>
+                  <li>• View your Excel file directly in the browser (read-only)</li>
+                  <li>• All AI changes are processed server-side with full Excel compatibility</li>
                 </ul>
               </div>
             </div>

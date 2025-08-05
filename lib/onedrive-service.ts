@@ -15,7 +15,7 @@ export interface OneDriveUploadResponse {
   user_id: string
   onedrive_file_id: string
   onedrive_web_url: string
-  embed_url: string
+  embed_url: string // Read-only embed URL
   folder_path: string
   size_bytes: number
   created_datetime: string
@@ -65,12 +65,12 @@ export class OneDriveService {
     }
   }
 
-  // Upload Excel file to OneDrive with edit permissions
+  // Upload Excel file to OneDrive with read-only embed permissions
   static async uploadFile(
     file: File,
     userId: string,
     folderPath?: string,
-    allowEdit = true,
+    allowEdit = false, // Default to read-only
   ): Promise<OneDriveUploadResponse> {
     try {
       this.logOneDriveInteraction("upload_start", {
@@ -153,8 +153,8 @@ export class OneDriveService {
     }
   }
 
-  // Get embed URL for existing file with edit permissions
-  static async getEmbedUrl(fileId: string, allowEdit = true): Promise<{ embed_url: string }> {
+  // Get embed URL for existing file with read-only permissions
+  static async getEmbedUrl(fileId: string, allowEdit = false): Promise<{ embed_url: string }> {
     try {
       this.logOneDriveInteraction("get_embed_url_start", { fileId, allowEdit })
 

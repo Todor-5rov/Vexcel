@@ -195,7 +195,7 @@ export default function FileHistory({ user, onFileSelect, selectedFileId, refres
                         {file.onedrive_embed_url && (
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
                             <Eye className="h-3 w-3 mr-1" />
-                            Interactive Excel Available
+                            Read-Only Excel Viewer Available
                           </span>
                         )}
                       </div>
@@ -209,7 +209,7 @@ export default function FileHistory({ user, onFileSelect, selectedFileId, refres
                             className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
                           >
                             <ExternalLink className="h-3 w-3" />
-                            Open in OneDrive (Full Editor)
+                            Open in OneDrive (Full Access)
                           </a>
                         </div>
                       )}

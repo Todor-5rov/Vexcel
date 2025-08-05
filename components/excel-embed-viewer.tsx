@@ -24,7 +24,7 @@ export default function ExcelEmbedViewer({
   const [error, setError] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   // Add state to track if this is an editable embed
-  const [isEditable, setIsEditable] = useState(true) // Default to editable
+  const [isEditable, setIsEditable] = useState(false) // Default to read-only
 
   // Handle refresh trigger
   useEffect(() => {
@@ -40,9 +40,8 @@ export default function ExcelEmbedViewer({
   // Check if the embed URL contains edit permissions
   useEffect(() => {
     if (embedUrl) {
-      // Check if URL contains edit parameters
-      const hasEditParams = embedUrl.includes("action=embedview") || embedUrl.includes("allow_edit=true")
-      setIsEditable(hasEditParams)
+      // All embeds are read-only for now
+      setIsEditable(false)
     }
   }, [embedUrl])
 
@@ -117,7 +116,7 @@ export default function ExcelEmbedViewer({
                 <div>
                   <div className="font-bold text-lg text-blue-700">Excel Viewer</div>
                   <div className="text-sm text-blue-600 font-normal">
-                    {filename ? `${filename} (${isEditable ? "Editable" : "View Only"})` : "OneDrive Embed"}
+                    {filename ? `${filename} (Read Only)` : "OneDrive Embed (Read Only)"}
                   </div>
                 </div>
               </CardTitle>
@@ -209,15 +208,15 @@ export default function ExcelEmbedViewer({
           <div className="flex-shrink-0 border-t border-gray-200 bg-blue-50 px-4 py-3">
             <div className="flex items-center justify-between text-sm text-gray-600">
               <div className="flex items-center gap-4">
-                <span>📊 {isEditable ? "Interactive Excel editing enabled" : "View-only mode"}</span>
+                <span>📊 Read-only Excel viewer</span>
                 <span>•</span>
-                <span>{isEditable ? "Changes sync automatically" : "Read-only access"}</span>
+                <span>View-only access to your spreadsheet</span>
               </div>
               <div className="flex items-center gap-2">
                 <div
                   className={`w-2 h-2 rounded-full animate-pulse ${isEditable ? "bg-green-500" : "bg-blue-500"}`}
                 ></div>
-                <span className="text-xs">{isEditable ? "Live Edit" : "View Only"}</span>
+                <span className="text-xs">View Only</span>
               </div>
             </div>
           </div>
