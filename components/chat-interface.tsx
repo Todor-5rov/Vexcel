@@ -16,6 +16,7 @@ import {
   FolderSyncIcon as Sync,
   Mic,
   MicOff,
+  Volume2,
 } from "lucide-react"
 import { ChatService } from "@/lib/chat-service"
 import { VoiceService } from "@/lib/voice-service"
@@ -39,7 +40,7 @@ interface ChatInterfaceProps {
   userId?: string
 }
 
-// Inline Voice Input Component with EXTENSIVE debugging
+// Enhanced Voice Input Component with better UX
 function VoiceInputButton({
   onTranscript,
   disabled = false,
@@ -52,26 +53,32 @@ function VoiceInputButton({
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isVoiceAvailable, setIsVoiceAvailable] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const [error, setError] = useState<string>("")
 
   useEffect(() => {
     console.log("🎤 VoiceInputButton useEffect - checking availability...")
-
-    // Check if voice input is available
     const available = VoiceService.isAvailable()
     console.log("🎤 VoiceInputButton - Voice available:", available)
     setIsVoiceAvailable(available)
-
-    // Also log browser capabilities
-    console.log("🎤 Navigator.mediaDevices:", !!navigator.mediaDevices)
-    console.log("🎤 getUserMedia:", !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia))
-    console.log(
-      "🎤 SpeechRecognition:",
-      !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition),
-    )
   }, [])
+
+  // Recording timer
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingTime((prev) => prev + 1)
+      }, 1000)
+    } else {
+      setRecordingTime(0)
+    }
+    return () => clearInterval(interval)
+  }, [isRecording])
 
   const handleToggleRecording = async () => {
     console.log("🎤 Voice button clicked! Recording:", isRecording)
+    setError("")
 
     if (isRecording) {
       // Stop recording
@@ -83,12 +90,16 @@ function VoiceInputButton({
         const result = await VoiceService.stopRecording()
         console.log("🎤 Recording result:", result)
 
-        if (result.text) {
+        if (result.text && result.text.trim()) {
           console.log("🎤 Calling onTranscript with:", result.text)
           onTranscript(result.text)
+        } else {
+          setError("No speech detected")
         }
       } catch (error) {
         console.error("🎤 Failed to process recording:", error)
+        const errorMessage = error instanceof Error ? error.message : "Recording failed"
+        setError(errorMessage)
       } finally {
         setIsProcessing(false)
       }
@@ -102,57 +113,92 @@ function VoiceInputButton({
       } catch (error) {
         console.error("🎤 Failed to start recording:", error)
         setIsRecording(false)
+        const errorMessage = error instanceof Error ? error.message : "Failed to start recording"
+        setError(errorMessage)
       }
     }
   }
 
-  console.log("🎤 VoiceInputButton render - Available:", isVoiceAvailable, "Disabled:", disabled)
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, "0")}`
+  }
 
-  // ALWAYS render the button for debugging, but show different states
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onClick={handleToggleRecording}
-      disabled={disabled || isProcessing}
-      className={`
-        relative transition-all duration-300 border-2
-        ${
-          !isVoiceAvailable
-            ? "border-gray-300 bg-gray-100 text-gray-400"
-            : isRecording
-              ? "border-red-400 bg-red-50 text-red-600 hover:bg-red-100 animate-pulse"
-              : "border-primary-300 text-primary-600 hover:bg-primary-50 bg-white"
-        }
-        ${className}
-      `}
-      title={
-        !isVoiceAvailable
-          ? "Voice input not available in this browser"
-          : isRecording
-            ? "Click to stop recording"
-            : "Click to start voice input"
-      }
-    >
-      {isProcessing ? (
-        <div className="w-4 h-4 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
-      ) : !isVoiceAvailable ? (
+  if (!isVoiceAvailable) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={true}
+        className={`border-gray-300 bg-gray-100 text-gray-400 ${className}`}
+        title="Voice input not available in this browser"
+      >
         <Mic className="h-4 w-4 opacity-50" />
-      ) : isRecording ? (
-        <MicOff className="h-4 w-4" />
-      ) : (
-        <Mic className="h-4 w-4" />
+      </Button>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={handleToggleRecording}
+        disabled={disabled || isProcessing}
+        className={`
+          relative transition-all duration-300 border-2
+          ${
+            isRecording
+              ? "border-red-400 bg-red-50 text-red-600 hover:bg-red-100 animate-pulse"
+              : error
+                ? "border-orange-400 bg-orange-50 text-orange-600"
+                : "border-primary-300 text-primary-600 hover:bg-primary-50 bg-white"
+          }
+          ${className}
+        `}
+        title={
+          isRecording
+            ? `Recording... ${formatTime(recordingTime)} - Click to stop`
+            : error
+              ? error
+              : "Click to start voice input"
+        }
+      >
+        {isProcessing ? (
+          <div className="w-4 h-4 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
+        ) : isRecording ? (
+          <div className="flex items-center gap-1">
+            <MicOff className="h-4 w-4" />
+            <span className="text-xs font-mono">{formatTime(recordingTime)}</span>
+          </div>
+        ) : (
+          <Mic className="h-4 w-4" />
+        )}
+
+        {/* Recording indicator */}
+        {isRecording && <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping" />}
+
+        {/* Error indicator */}
+        {error && !isRecording && <div className="absolute -top-1 -right-1 w-3 h-3 bg-orange-500 rounded-full" />}
+      </Button>
+
+      {/* Recording status tooltip */}
+      {isRecording && (
+        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-red-600 text-white text-xs px-2 py-1 rounded whitespace-nowrap animate-fade-in-up">
+          🎤 Recording... Speak now!
+        </div>
       )}
 
-      {/* Recording indicator */}
-      {isRecording && <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping" />}
-
-      {/* Debug indicator */}
-      {!isVoiceAvailable && (
-        <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500 rounded-full" title="Voice not available" />
+      {/* Error tooltip */}
+      {error && !isRecording && (
+        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-orange-600 text-white text-xs px-2 py-1 rounded whitespace-nowrap animate-fade-in-up max-w-48 text-center">
+          {error}
+        </div>
       )}
-    </Button>
+    </div>
   )
 }
 
@@ -170,9 +216,6 @@ export default function ChatInterface({
   const [isLoading, setIsLoading] = useState(false)
   const [hasApiKey, setHasApiKey] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  // Add debug logging for component render
-  console.log("🎤 ChatInterface render - fileId:", fileId, "userId:", userId)
 
   // Function to clean markdown from AI responses
   const cleanMarkdown = (text: string): string => {
@@ -249,7 +292,7 @@ export default function ChatInterface({
   const getWelcomeMessage = () => {
     if (currentData.length > 0 && headers.length > 0) {
       const filename = mcpFilePath?.split("/").pop() || "your file"
-      return `Hello! I can see your spreadsheet "${filename}" with ${currentData.length - 1} rows and columns: ${headers.join(", ")}. I can help you manipulate this data using natural language. Try asking me to "sort by ${headers[0]}", "calculate averages", or "add a new column". All changes will be automatically synced to OneDrive for real-time collaboration! 🎤 You can also use voice input to speak your commands.`
+      return `Hello! I can see your spreadsheet "${filename}" with ${currentData.length - 1} rows and columns: ${headers.join(", ")}. I can help you manipulate this data using natural language. Try asking me to "sort by ${headers[0]}", "calculate averages", or "add a new column". All changes will be automatically synced to OneDrive for real-time collaboration! 🎤 You can also use voice input to speak your commands - just click the microphone button and speak clearly.`
     }
     return "Hello! Upload an Excel file and I'll help you manipulate your data using natural language commands with advanced Excel operations and real-time OneDrive sync. 🎤 You can use voice input to speak your commands!"
   }
@@ -453,12 +496,6 @@ export default function ChatInterface({
   const canChat = mcpFilePath && hasApiKey && userId && fileId
   const filename = mcpFilePath?.split("/").pop() || ""
 
-  console.log("🎤 === CHAT INTERFACE RENDER DEBUG ===")
-  console.log("🎤 Can chat:", canChat)
-  console.log("🎤 Voice service available:", VoiceService.isAvailable())
-  console.log("🎤 File ID:", fileId)
-  console.log("🎤 User ID:", userId)
-
   return (
     <div className="h-full flex flex-col">
       <Card className="h-full flex flex-col shadow-xl border-0 bg-gradient-to-br from-white to-primary-25 overflow-hidden">
@@ -572,7 +609,7 @@ export default function ChatInterface({
                     </p>
                     {message.voiceInput && (
                       <div className="flex items-center gap-1 text-xs text-primary-200">
-                        <Mic className="h-3 w-3" />
+                        <Volume2 className="h-3 w-3" />
                         Voice
                       </div>
                     )}
@@ -633,6 +670,21 @@ export default function ChatInterface({
             </div>
           )}
 
+          {/* Voice Input Tips */}
+          {VoiceService.isAvailable() && messages.length <= 2 && (
+            <div className="flex-shrink-0 border-t border-blue-200 p-4 bg-blue-50/50">
+              <div className="flex items-center gap-2 mb-2">
+                <Mic className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-700">Voice Input Tips</span>
+              </div>
+              <div className="text-xs text-blue-600 space-y-1">
+                <p>• Click the microphone button and speak clearly</p>
+                <p>• Try: "Sort by salary descending" or "Add a new column called bonus"</p>
+                <p>• Speak in a quiet environment for best results</p>
+              </div>
+            </div>
+          )}
+
           {/* Suggestions */}
           {currentData.length > 0 && messages.length <= 2 && canChat && (
             <div className="flex-shrink-0 border-t border-primary-200 p-4 bg-primary-50/50">
@@ -687,14 +739,12 @@ export default function ChatInterface({
                 )}
               </div>
 
-              {/* Voice Input Button - ALWAYS VISIBLE FOR DEBUGGING */}
-              <div className="flex items-center">
-                <VoiceInputButton
-                  onTranscript={handleVoiceTranscript}
-                  disabled={!canChat || isLoading}
-                  className="h-12"
-                />
-              </div>
+              {/* Enhanced Voice Input Button */}
+              <VoiceInputButton
+                onTranscript={handleVoiceTranscript}
+                disabled={!canChat || isLoading}
+                className="h-12"
+              />
 
               <Button
                 onClick={() => handleSend()}

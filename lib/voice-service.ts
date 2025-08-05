@@ -20,6 +20,7 @@ export class VoiceService {
   private static mediaRecorder: MediaRecorder | null = null
   private static audioChunks: Blob[] = []
   private static isRecording = false
+  private static recognition: any = null
 
   // Initialize the voice service with ElevenLabs API key
   static initialize(config: VoiceConfig) {
@@ -27,7 +28,7 @@ export class VoiceService {
     console.log("Voice service initialized with ElevenLabs")
   }
 
-  // Check if voice service is available - SIMPLIFIED FOR DEBUGGING
+  // Check if voice service is available
   static isAvailable(): boolean {
     console.log("🎤 VoiceService.isAvailable() called")
 
@@ -38,120 +39,136 @@ export class VoiceService {
     console.log("🎤 Media devices support:", hasMediaDevices)
     console.log("🎤 Speech recognition support:", hasSpeechRecognition)
 
-    // For now, let's just check for basic media support
-    const isAvailable = hasMediaDevices
+    // Need both for voice input to work
+    const isAvailable = hasMediaDevices && hasSpeechRecognition
     console.log("🎤 Voice service available:", isAvailable)
 
     return isAvailable
   }
 
-  // Start voice recording for speech-to-text
+  // Start voice recording for speech-to-text using Web Speech API directly
   static async startRecording(): Promise<void> {
-    console.log("🎤 Starting voice recording...")
+    console.log("🎤 Starting voice recording with Web Speech API...")
 
     if (this.isRecording) {
       throw new Error("Already recording")
     }
 
     try {
+      // Request microphone permission first
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      console.log("🎤 Got media stream:", stream)
+      console.log("🎤 Got microphone permission")
 
-      this.mediaRecorder = new MediaRecorder(stream)
-      this.audioChunks = []
-      this.isRecording = true
+      // Stop the stream immediately since we're using Web Speech API
+      stream.getTracks().forEach((track) => track.stop())
 
-      this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          this.audioChunks.push(event.data)
-        }
+      // Use Web Speech API directly
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+
+      if (!SpeechRecognition) {
+        throw new Error("Speech recognition not supported in this browser")
       }
 
-      this.mediaRecorder.start()
+      this.recognition = new SpeechRecognition()
+      this.recognition.continuous = true // Keep listening
+      this.recognition.interimResults = true // Show interim results
+      this.recognition.lang = "en-US"
+      this.recognition.maxAlternatives = 1
+
+      this.isRecording = true
+      console.log("🎤 Starting speech recognition...")
+
+      this.recognition.start()
       console.log("🎤 Voice recording started successfully")
     } catch (error) {
       console.error("🎤 Error starting voice recording:", error)
+      this.isRecording = false
       throw new Error("Failed to start voice recording. Please check microphone permissions.")
     }
   }
 
-  // Stop recording and convert to text
+  // Stop recording and get the result
   static async stopRecording(): Promise<SpeechToTextResult> {
     console.log("🎤 Stopping voice recording...")
 
-    if (!this.isRecording || !this.mediaRecorder) {
+    if (!this.isRecording || !this.recognition) {
       throw new Error("Not currently recording")
     }
 
     return new Promise((resolve, reject) => {
-      if (!this.mediaRecorder) {
-        reject(new Error("MediaRecorder not available"))
+      if (!this.recognition) {
+        reject(new Error("Speech recognition not available"))
         return
       }
 
-      this.mediaRecorder.onstop = async () => {
-        try {
-          this.isRecording = false
+      let finalTranscript = ""
+      let hasResult = false
 
-          // Stop all tracks to release microphone
-          const stream = this.mediaRecorder?.stream
-          if (stream) {
-            stream.getTracks().forEach((track) => track.stop())
+      this.recognition.onresult = (event: any) => {
+        console.log("🎤 Speech recognition result event:", event)
+
+        let interimTranscript = ""
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript
+            hasResult = true
+            console.log("🎤 Final transcript:", finalTranscript)
+          } else {
+            interimTranscript += transcript
+            console.log("🎤 Interim transcript:", interimTranscript)
           }
-
-          // Use Web Speech API for speech-to-text (free alternative)
-          const result = await this.speechToTextWithWebAPI()
-          resolve(result)
-        } catch (error) {
-          console.error("🎤 Error processing voice recording:", error)
-          reject(error)
         }
       }
 
-      this.mediaRecorder.stop()
-    })
-  }
-
-  // Use Web Speech API for speech recognition (free)
-  private static speechToTextWithWebAPI(): Promise<SpeechToTextResult> {
-    console.log("🎤 Using Web Speech API for recognition...")
-
-    return new Promise((resolve, reject) => {
-      // @ts-ignore - Web Speech API types
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-
-      if (!SpeechRecognition) {
-        reject(new Error("Speech recognition not supported in this browser"))
-        return
-      }
-
-      const recognition = new SpeechRecognition()
-      recognition.continuous = false
-      recognition.interimResults = false
-      recognition.lang = "en-US"
-
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript
-        const confidence = event.results[0][0].confidence
-
-        console.log("🎤 Speech recognition result:", transcript)
-        resolve({
-          text: transcript,
-          confidence: confidence,
-        })
-      }
-
-      recognition.onerror = (event: any) => {
-        console.error("🎤 Speech recognition error:", event.error)
-        reject(new Error(`Speech recognition failed: ${event.error}`))
-      }
-
-      recognition.onend = () => {
+      this.recognition.onend = () => {
         console.log("🎤 Speech recognition ended")
+        this.isRecording = false
+
+        if (hasResult && finalTranscript.trim()) {
+          resolve({
+            text: finalTranscript.trim(),
+            confidence: 0.8, // Default confidence
+          })
+        } else {
+          // If no final result, try to use any interim results
+          reject(new Error("No speech detected. Please speak clearly and try again."))
+        }
       }
 
-      // Start recognition
-      recognition.start()
+      this.recognition.onerror = (event: any) => {
+        console.error("🎤 Speech recognition error:", event.error)
+        this.isRecording = false
+
+        let errorMessage = "Speech recognition failed"
+
+        switch (event.error) {
+          case "no-speech":
+            errorMessage = "No speech detected. Please speak louder and try again."
+            break
+          case "audio-capture":
+            errorMessage = "Microphone not accessible. Please check permissions."
+            break
+          case "not-allowed":
+            errorMessage = "Microphone permission denied. Please allow microphone access."
+            break
+          case "network":
+            errorMessage = "Network error. Please check your internet connection."
+            break
+          case "aborted":
+            errorMessage = "Speech recognition was stopped."
+            break
+          default:
+            errorMessage = `Speech recognition error: ${event.error}`
+        }
+
+        reject(new Error(errorMessage))
+      }
+
+      // Stop the recognition
+      this.recognition.stop()
     })
   }
 
@@ -224,15 +241,12 @@ export class VoiceService {
 
   // Cancel current recording
   static cancelRecording(): void {
-    if (this.mediaRecorder && this.isRecording) {
-      this.mediaRecorder.stop()
-      this.isRecording = false
+    console.log("🎤 Cancelling voice recording...")
 
-      // Stop all tracks
-      const stream = this.mediaRecorder.stream
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop())
-      }
+    if (this.recognition && this.isRecording) {
+      this.recognition.stop()
+      this.recognition = null
+      this.isRecording = false
     }
   }
 }
